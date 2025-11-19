@@ -26,6 +26,7 @@ install_ignition_unit() {
 install() {
     inst_multiple \
         basename \
+        findmnt \
         lsblk
 
     # Not all features of the configuration may be available on all systems
@@ -72,6 +73,9 @@ install() {
 
     inst_script "$moddir/ignition-kargs-helper.sh" \
         "/usr/sbin/ignition-kargs-helper"
+
+    inst_script "$moddir/ignition-fetch-userdata-helper.sh" \
+        "/usr/sbin/ignition-fetch-userdata-helper"
 
     # Distro packaging is expected to install the ignition binary into the
     # module directory.

@@ -25,4 +25,6 @@ After=network.target
 Type=oneshot
 RemainAfterExit=yes
 EnvironmentFile=/run/ignition.env
+# Run custom helper to fetch user data from Azure provisioning media
+ExecStartPre=/usr/sbin/ignition-fetch-userdata-helper
 ExecStart=/usr/bin/ignition --root=/sysroot --platform=${PLATFORM_ID} --stage=fetch ${IGNITION_ARGS}
