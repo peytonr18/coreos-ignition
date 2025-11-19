@@ -58,26 +58,14 @@ main() {
 
     xml_content=$(cat "$mount_dir/$OVF_FILE")
 
-    # Extract user data from LinuxProvisioningConfigurationSet:
-    # - UserName
-    # - UserPassword (may be hashed or plain)
-    # - DisableSSHPasswordAuthentication
-    # - SSH/PublicKeys/PublicKey/Fingerprint
-    # - SSH/PublicKeys/PublicKey/Path
-    # - SSH/PublicKeys/PublicKey/Value
-    # - CustomData (base64 encoded)
-
+    # Extract user data from LinuxProvisioningConfigurationSet
     username=$(extract_ns_xml_value "UserName" "$xml_content")
     userpassword=$(extract_ns_xml_value "UserPassword" "$xml_content")
-    
     ssh_keys=$(echo "$xml_content" | grep -oP '(?<=<Value>)[^<]+' | grep '^ssh-' || echo "")
-    
-    custom_data=$(extract_ns_xml_value "CustomData" "$xml_content")
 
     log "Extracted username: ${username:-<none>}"
     log "Extracted password: ${userpassword:+<present>}"
     log "Extracted SSH keys: ${ssh_keys:+<present>}"
-    log "Extracted custom data: ${custom_data:+<present>}"
 
     if [[ -z "$username" ]]; then
         log "No username found in provisioning data, skipping config generation..."
@@ -163,3 +151,4 @@ EOF
 
 # Run main function
 main "$@"
+
