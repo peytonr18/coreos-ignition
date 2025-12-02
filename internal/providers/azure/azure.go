@@ -505,31 +505,26 @@ func collectSSHPublicKeys(meta *instanceMetadata, provisioning *linuxProvisionin
 	seen := make(map[string]struct{})
 	var keys []types.SSHAuthorizedKey
 
-	if meta != nil {
-		for _, k := range meta.Compute.PublicKeys {
-			key := strings.TrimSpace(k.KeyData)
-			if key == "" {
-				continue
-			}
-			if _, ok := seen[key]; ok {
-				continue
-			}
+	addKey := func(keyData string) {
+		key := strings.TrimSpace(keyData)
+		if key == "" {
+			return
+		}
+		if _, ok := seen[key]; !ok {
 			seen[key] = struct{}{}
 			keys = append(keys, types.SSHAuthorizedKey(key))
 		}
 	}
 
+	if meta != nil {
+		for _, k := range meta.Compute.PublicKeys {
+			addKey(k.KeyData)
+		}
+	}
+
 	if provisioning != nil {
 		for _, pk := range provisioning.SSH.PublicKeys {
-			key := strings.TrimSpace(pk.Value)
-			if key == "" {
-				continue
-			}
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			keys = append(keys, types.SSHAuthorizedKey(key))
+			addKey(pk.Value)
 		}
 	}
 

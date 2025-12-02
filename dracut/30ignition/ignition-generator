@@ -66,7 +66,14 @@ ignition_args=()
 # Usage: ignition.config.generate=azure
 generate_config="$(cmdline_arg ignition.config.generate)"
 if [[ -n "${generate_config}" ]]; then
-    ignition_args+=("--generate-cloud-config=${generate_config}")
+    # Basic validation to prevent command injection. The value should be a
+    # simple platform identifier.
+    if [[ "${generate_config}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        ignition_args+=("--generate-cloud-config=${generate_config}")
+    else
+        # Log to stderr, which is redirected to kmsg
+        echo "ignition-generator: invalid value for ignition.config.generate: ${generate_config}" >&2
+    fi
 fi
 
 {
