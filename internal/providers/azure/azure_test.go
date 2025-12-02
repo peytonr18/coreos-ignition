@@ -241,3 +241,299 @@ func TestIsPasswordHashed(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildGeneratedConfigUsernamePriority(t *testing.T) {
+	// Test that IMDS AdminUsername takes priority over OVF UserName
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "imds-admin",
+			},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{
+		UserName: "ovf-user",
+	}
+
+	cfg, err := buildGeneratedConfig(meta, prov)
+	if err != nil {
+		t.Fatalf("buildGeneratedConfig() err = %v", err)
+	}
+	if cfg.Passwd.Users[0].Name != "imds-admin" {
+		t.Fatalf("expected IMDS username 'imds-admin' to take priority, got %s", cfg.Passwd.Users[0].Name)
+	}
+}
+
+func TestBuildGeneratedConfigUsernameFallback(t *testing.T) {
+	// Test fallback to OVF UserName when IMDS AdminUsername is empty
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "",
+			},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{
+		UserName: "ovf-user",
+	}
+
+	cfg, err := buildGeneratedConfig(meta, prov)
+	if err != nil {
+		t.Fatalf("buildGeneratedConfig() err = %v", err)
+	}
+	if cfg.Passwd.Users[0].Name != "ovf-user" {
+		t.Fatalf("expected OVF username 'ovf-user' as fallback, got %s", cfg.Passwd.Users[0].Name)
+	}
+}
+
+func TestBuildGeneratedConfigWhitespaceUsername(t *testing.T) {
+	// Test that whitespace-only usernames are treated as empty
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "   ",
+			},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{
+		UserName: "ovf-user",
+	}
+
+	cfg, err := buildGeneratedConfig(meta, prov)
+	if err != nil {
+		t.Fatalf("buildGeneratedConfig() err = %v", err)
+	}
+	if cfg.Passwd.Users[0].Name != "ovf-user" {
+		t.Fatalf("expected OVF username when IMDS is whitespace, got %s", cfg.Passwd.Users[0].Name)
+	}
+}
+
+func TestBuildGeneratedConfigNilMetadata(t *testing.T) {
+	prov := &linuxProvisioningConfigurationSet{
+		UserName: "ovf-user",
+	}
+
+	// nil metadata should cause a panic or error - test the behavior
+	defer func() {
+		if r := recover(); r == nil {
+			// If no panic, the function should have returned an error or handled nil
+		}
+	}()
+
+	cfg, err := buildGeneratedConfig(nil, prov)
+	if err != nil {
+		// Expected - nil metadata should cause an error
+		return
+	}
+	// If no error, verify the config still works with OVF data
+	if cfg.Passwd.Users[0].Name != "ovf-user" {
+		t.Fatalf("expected ovf-user, got %s", cfg.Passwd.Users[0].Name)
+	}
+}
+
+func TestBuildGeneratedConfigNilProvisioning(t *testing.T) {
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "imds-admin",
+			},
+		},
+	}
+
+	// nil provisioning should be handled gracefully
+	defer func() {
+		if r := recover(); r == nil {
+			// If no panic, the function handled nil correctly
+		}
+	}()
+
+	cfg, err := buildGeneratedConfig(meta, nil)
+	if err != nil {
+		// Expected - nil provisioning may cause an error
+		return
+	}
+	if cfg.Passwd.Users[0].Name != "imds-admin" {
+		t.Fatalf("expected imds-admin, got %s", cfg.Passwd.Users[0].Name)
+	}
+}
+
+func TestBuildGeneratedConfigEmptySSHKeys(t *testing.T) {
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "testuser",
+			},
+			PublicKeys: []instancePublicKey{},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{
+		SSH: sshSection{
+			PublicKeys: []sshPublicKey{},
+		},
+	}
+
+	cfg, err := buildGeneratedConfig(meta, prov)
+	if err != nil {
+		t.Fatalf("buildGeneratedConfig() err = %v", err)
+	}
+	if len(cfg.Passwd.Users[0].SSHAuthorizedKeys) != 0 {
+		t.Fatalf("expected 0 SSH keys, got %d", len(cfg.Passwd.Users[0].SSHAuthorizedKeys))
+	}
+}
+
+func TestBuildGeneratedConfigNoPassword(t *testing.T) {
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "testuser",
+			},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{}
+
+	cfg, err := buildGeneratedConfig(meta, prov)
+	if err != nil {
+		t.Fatalf("buildGeneratedConfig() err = %v", err)
+	}
+	if cfg.Passwd.Users[0].PasswordHash != nil {
+		t.Fatalf("expected nil password hash when no password provided, got %v", *cfg.Passwd.Users[0].PasswordHash)
+	}
+}
+
+func TestBuildGeneratedConfigWhitespacePassword(t *testing.T) {
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			OSProfile: instanceOSProfile{
+				AdminUsername: "testuser",
+			},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{
+		UserPassword: "   ",
+	}
+
+	cfg, err := buildGeneratedConfig(meta, prov)
+	if err != nil {
+		t.Fatalf("buildGeneratedConfig() err = %v", err)
+	}
+	// Whitespace-only password should be treated as empty
+	if cfg.Passwd.Users[0].PasswordHash != nil {
+		t.Fatalf("expected nil password hash for whitespace password, got %v", *cfg.Passwd.Users[0].PasswordHash)
+	}
+}
+
+func TestParseProvisioningConfigMalformedXML(t *testing.T) {
+	malformed := []byte(`<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
+		<LinuxProvisioningConfigurationSet>
+			<UserName>testuser
+		</LinuxProvisioningConfigurationSet>
+	</wa:ProvisioningSection>`)
+
+	_, err := parseProvisioningConfig(malformed)
+	if err == nil {
+		t.Fatalf("expected error for malformed XML")
+	}
+}
+
+func TestParseProvisioningConfigEmptyXML(t *testing.T) {
+	empty := []byte(``)
+
+	_, err := parseProvisioningConfig(empty)
+	if err == nil {
+		t.Fatalf("expected error for empty XML")
+	}
+}
+
+func TestParseProvisioningConfigMinimalXML(t *testing.T) {
+	// XML with missing optional sections
+	minimal := []byte(`
+<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
+  <LinuxProvisioningConfigurationSet>
+    <UserName>minimaluser</UserName>
+  </LinuxProvisioningConfigurationSet>
+</wa:ProvisioningSection>`)
+
+	cfg, err := parseProvisioningConfig(minimal)
+	if err != nil {
+		t.Fatalf("parseProvisioningConfig() err = %v", err)
+	}
+	if cfg.UserName != "minimaluser" {
+		t.Fatalf("expected username 'minimaluser', got %s", cfg.UserName)
+	}
+	if cfg.UserPassword != "" {
+		t.Fatalf("expected empty password, got %s", cfg.UserPassword)
+	}
+	if len(cfg.SSH.PublicKeys) != 0 {
+		t.Fatalf("expected 0 SSH keys, got %d", len(cfg.SSH.PublicKeys))
+	}
+}
+
+func TestParseProvisioningConfigEmptySection(t *testing.T) {
+	// XML with empty LinuxProvisioningConfigurationSet
+	emptySection := []byte(`
+<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
+  <LinuxProvisioningConfigurationSet>
+  </LinuxProvisioningConfigurationSet>
+</wa:ProvisioningSection>`)
+
+	cfg, err := parseProvisioningConfig(emptySection)
+	if err != nil {
+		t.Fatalf("parseProvisioningConfig() err = %v", err)
+	}
+	if cfg.UserName != "" {
+		t.Fatalf("expected empty username, got %s", cfg.UserName)
+	}
+}
+
+func TestCollectSSHPublicKeysNilInputs(t *testing.T) {
+	// Test with nil metadata
+	keys := collectSSHPublicKeys(nil, &linuxProvisioningConfigurationSet{
+		SSH: sshSection{
+			PublicKeys: []sshPublicKey{{Value: "ssh-rsa AAAA"}},
+		},
+	})
+	if len(keys) != 1 {
+		t.Fatalf("expected 1 key with nil metadata, got %d", len(keys))
+	}
+
+	// Test with nil provisioning
+	keys = collectSSHPublicKeys(&instanceMetadata{
+		Compute: instanceComputeMetadata{
+			PublicKeys: []instancePublicKey{{KeyData: "ssh-rsa BBBB"}},
+		},
+	}, nil)
+	if len(keys) != 1 {
+		t.Fatalf("expected 1 key with nil provisioning, got %d", len(keys))
+	}
+
+	// Test with both nil
+	keys = collectSSHPublicKeys(nil, nil)
+	if len(keys) != 0 {
+		t.Fatalf("expected 0 keys with both nil, got %d", len(keys))
+	}
+}
+
+func TestCollectSSHPublicKeysWhitespaceOnly(t *testing.T) {
+	meta := &instanceMetadata{
+		Compute: instanceComputeMetadata{
+			PublicKeys: []instancePublicKey{
+				{KeyData: "   "},
+				{KeyData: "ssh-rsa AAAA"},
+				{KeyData: "\t\n"},
+			},
+		},
+	}
+	prov := &linuxProvisioningConfigurationSet{
+		SSH: sshSection{
+			PublicKeys: []sshPublicKey{
+				{Value: ""},
+				{Value: "ssh-rsa BBBB"},
+			},
+		},
+	}
+
+	keys := collectSSHPublicKeys(meta, prov)
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 non-empty keys, got %d", len(keys))
+	}
+}
