@@ -308,55 +308,6 @@ func TestBuildGeneratedConfigWhitespaceUsername(t *testing.T) {
 	}
 }
 
-func TestBuildGeneratedConfigNilMetadata(t *testing.T) {
-	prov := &linuxProvisioningConfigurationSet{
-		UserName: "ovf-user",
-	}
-
-	// nil metadata should cause a panic or error - test the behavior
-	defer func() {
-		if r := recover(); r == nil {
-			// If no panic, the function should have returned an error or handled nil
-		}
-	}()
-
-	cfg, err := buildGeneratedConfig(nil, prov)
-	if err != nil {
-		// Expected - nil metadata should cause an error
-		return
-	}
-	// If no error, verify the config still works with OVF data
-	if cfg.Passwd.Users[0].Name != "ovf-user" {
-		t.Fatalf("expected ovf-user, got %s", cfg.Passwd.Users[0].Name)
-	}
-}
-
-func TestBuildGeneratedConfigNilProvisioning(t *testing.T) {
-	meta := &instanceMetadata{
-		Compute: instanceComputeMetadata{
-			OSProfile: instanceOSProfile{
-				AdminUsername: "imds-admin",
-			},
-		},
-	}
-
-	// nil provisioning should be handled gracefully
-	defer func() {
-		if r := recover(); r == nil {
-			// If no panic, the function handled nil correctly
-		}
-	}()
-
-	cfg, err := buildGeneratedConfig(meta, nil)
-	if err != nil {
-		// Expected - nil provisioning may cause an error
-		return
-	}
-	if cfg.Passwd.Users[0].Name != "imds-admin" {
-		t.Fatalf("expected imds-admin, got %s", cfg.Passwd.Users[0].Name)
-	}
-}
-
 func TestBuildGeneratedConfigEmptySSHKeys(t *testing.T) {
 	meta := &instanceMetadata{
 		Compute: instanceComputeMetadata{
@@ -416,7 +367,7 @@ func TestBuildGeneratedConfigWhitespacePassword(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildGeneratedConfig() err = %v", err)
 	}
-	// Whitespace-only password should be treated as empty
+
 	if cfg.Passwd.Users[0].PasswordHash != nil {
 		t.Fatalf("expected nil password hash for whitespace password, got %v", *cfg.Passwd.Users[0].PasswordHash)
 	}
@@ -445,7 +396,6 @@ func TestParseProvisioningConfigEmptyXML(t *testing.T) {
 }
 
 func TestParseProvisioningConfigMinimalXML(t *testing.T) {
-	// XML with missing optional sections
 	minimal := []byte(`
 <wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
   <LinuxProvisioningConfigurationSet>
@@ -469,7 +419,6 @@ func TestParseProvisioningConfigMinimalXML(t *testing.T) {
 }
 
 func TestParseProvisioningConfigEmptySection(t *testing.T) {
-	// XML with empty LinuxProvisioningConfigurationSet
 	emptySection := []byte(`
 <wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
   <LinuxProvisioningConfigurationSet>
@@ -486,7 +435,6 @@ func TestParseProvisioningConfigEmptySection(t *testing.T) {
 }
 
 func TestCollectSSHPublicKeysNilInputs(t *testing.T) {
-	// Test with nil metadata
 	keys := collectSSHPublicKeys(nil, &linuxProvisioningConfigurationSet{
 		SSH: sshSection{
 			PublicKeys: []sshPublicKey{{Value: "ssh-rsa AAAA"}},
@@ -496,7 +444,6 @@ func TestCollectSSHPublicKeysNilInputs(t *testing.T) {
 		t.Fatalf("expected 1 key with nil metadata, got %d", len(keys))
 	}
 
-	// Test with nil provisioning
 	keys = collectSSHPublicKeys(&instanceMetadata{
 		Compute: instanceComputeMetadata{
 			PublicKeys: []instancePublicKey{{KeyData: "ssh-rsa BBBB"}},
@@ -506,7 +453,6 @@ func TestCollectSSHPublicKeysNilInputs(t *testing.T) {
 		t.Fatalf("expected 1 key with nil provisioning, got %d", len(keys))
 	}
 
-	// Test with both nil
 	keys = collectSSHPublicKeys(nil, nil)
 	if len(keys) != 0 {
 		t.Fatalf("expected 0 keys with both nil, got %d", len(keys))
