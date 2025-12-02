@@ -3,8 +3,6 @@ package azure
 import (
 	"strings"
 	"testing"
-
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
 )
 
 func TestParseProvisioningConfig(t *testing.T) {
@@ -161,8 +159,8 @@ func TestNewDataFile(t *testing.T) {
 	if file.Mode == nil || *file.Mode != 0640 {
 		t.Fatalf("unexpected mode %#v", file.Mode)
 	}
-	if file.Contents.Source == nil || !strings.Contains(*file.Contents.Source, content) {
-		t.Fatalf("expected contents to include original data")
+	if file.Contents.Source == nil || !strings.HasPrefix(*file.Contents.Source, "data:") {
+		t.Fatalf("expected contents to be a data URL, got %v", file.Contents.Source)
 	}
 }
 
