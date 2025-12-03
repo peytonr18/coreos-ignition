@@ -4,7 +4,50 @@ nav_order: 9
 
 # Release Notes
 
-## Upcoming Ignition 2.22.0 (unreleased)
+## Upcoming Ignition 2.25.0 (unreleased)
+
+### Breaking changes
+
+### Features
+- The name for custom clevis pins is not validated by Ignition anymore, enabling the use of arbitrary custom pins.
+- Add `--generate-cloud-config` flag to synthesize an Ignition config from cloud provider metadata. On Azure, this creates an admin user from IMDS metadata and OVF provisioning data.
+
+### Changes
+
+- Add `oem` URL scheme for Flatcar Container Linux relates to [Butane #634](https://github.com/coreos/butane/issues/634)
+
+### Bug fixes
+
+- Fix invalid random source in FIPS 140-only mode in FIPS mode ([#2159](https://github.com/coreos/ignition/pull/2159))
+
+## Ignition 2.24.0 (2024-10-14)
+
+### Features
+
+- Add support for nocloud config fetching in kubevirt
+
+### Bug fixes
+
+- Fix occasional cex.key file removal
+- Fix multipath partitioning: ignore DM holders when no partitions are mounted
+
+## Ignition 2.23.0 (2025-09-10)
+
+### Features
+
+- Support UpCloud
+
+### Changes
+
+- Switch to aws-sdk-go-v2 for S3 fetches and EC2 interactions
+
+### Bug fixes
+
+- Fix fetch-offline for Oracle Cloud Infrastructure
+
+## Ignition 2.22.0 (2025-07-08)
+Starting with this release, ignition-validate binaries are signed with the
+[Fedora 42 key](https://getfedora.org/security/).
 
 ### Breaking changes
 
