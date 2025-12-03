@@ -1,0 +1,46 @@
+#!/bin/bash
+# -*- mode: shell-script; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# ex: ts=8 sw=4 sts=4 et filetype=sh
+#
+# This script parses the kernel command line for ignition.config.generate
+# and writes the appropriate IGNITION_ARGS to the environment file.
+# Called by ignition-fetch services via ExecStartPre.
+
+set -e
+
+IGNITION_ENV="/run/ignition.env"
+
+# Only run once - check if IGNITION_ARGS is already set
+if grep -q "^IGNITION_ARGS=" "${IGNITION_ENV}" 2>/dev/null; then
+    exit 0
+fi
+
+# Parse kernel cmdline for a specific argument
+cmdline_arg() {
+    local name="$1" value="$2"
+    for arg in $(</proc/cmdline); do
+        if [[ "${arg%%=*}" == "${name}" ]]; then
+            value="${arg#*=}"
+        fi
+    done
+    echo "${value}"
+}
+
+# Check if cloud config generation is requested via kernel cmdline
+# Usage: ignition.config.generate=azure
+generate_config="$(cmdline_arg ignition.config.generate)"
+
+ignition_args=""
+if [[ -n "${generate_config}" ]]; then
+    # Basic validation to prevent command injection. The value should be a
+    # simple platform identifier.
+    if [[ "${generate_config}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        ignition_args="--generate-cloud-config=${generate_config}"
+    else
+        echo "ignition-setup-generate-config: invalid value for ignition.config.generate: ${generate_config}" >&2
+    fi
+fi
+
+# Append IGNITION_ARGS to the environment file
+echo "IGNITION_ARGS=${ignition_args}" >> "${IGNITION_ENV}"
+

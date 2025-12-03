@@ -73,6 +73,9 @@ install() {
     inst_script "$moddir/ignition-kargs-helper.sh" \
         "/usr/sbin/ignition-kargs-helper"
 
+    inst_script "$moddir/ignition-setup-generate-config" \
+        "/usr/libexec/ignition-setup-generate-config"
+
     # Distro packaging is expected to install the ignition binary into the
     # module directory.
     inst_simple "$moddir/ignition" \
