@@ -10,6 +10,7 @@ nav_order: 9
 
 ### Features
 - The name for custom clevis pins is not validated by Ignition anymore, enabling the use of arbitrary custom pins.
+- Add `--generate-cloud-config` flag to synthesize an Ignition config from cloud provider metadata. On Azure, this creates an admin user from IMDS metadata and OVF provisioning data.
 
 ### Changes
 
