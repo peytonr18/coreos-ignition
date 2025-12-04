@@ -15,7 +15,14 @@
 package util
 
 import (
+	"bufio"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io/ioutil"
+	"net/textproto"
+	"strings"
+	"unicode"
 
 	"github.com/flatcar/ignition/v2/config/shared/errors"
 
@@ -24,10 +31,56 @@ import (
 	"github.com/coreos/vcontext/tree"
 )
 
+func isMultipartMime(userdata []byte) bool {
+	userdata = decompressIfGzipped(userdata)
+	mimeReader := textproto.NewReader(bufio.NewReader(bytes.NewReader(userdata)))
+	header, err := mimeReader.ReadMIMEHeader()
+	if err != nil {
+		return false
+	}
+	contentType := header.Get("Content-Type")
+
+	return strings.Contains(contentType, "multipart/mixed")
+}
+
+func isCloudConfig(userdata []byte) bool {
+	header := strings.SplitN(string(decompressIfGzipped(userdata)), "\n", 2)[0]
+
+	// Trim trailing whitespaces
+	header = strings.TrimRightFunc(header, unicode.IsSpace)
+
+	return (header == "#cloud-config")
+}
+
+func isScript(userdata []byte) bool {
+	header := strings.SplitN(string(decompressIfGzipped(userdata)), "\n", 2)[0]
+	return strings.HasPrefix(header, "#!")
+}
+
+func decompressIfGzipped(data []byte) []byte {
+	if reader, err := gzip.NewReader(bytes.NewReader(data)); err == nil {
+		uncompressedData, err := ioutil.ReadAll(reader)
+		reader.Close()
+		if err == nil {
+			return uncompressedData
+		} else {
+			return data
+		}
+	} else {
+		return data
+	}
+}
+
 // HandleParseErrors will attempt to unmarshal an invalid rawConfig into "to".
 // If it fails to unmarsh it will generate a report.Report from the errors.
 func HandleParseErrors(rawConfig []byte, to interface{}) (report.Report, error) {
 	r := report.Report{}
+
+	if isCloudConfig(rawConfig) || isScript(rawConfig) || isMultipartMime(rawConfig) {
+		// returning ErrEmpty will make ignition ignoring this user provided config.
+		return report.Report{}, errors.ErrEmpty
+	}
+
 	err := json.Unmarshal(rawConfig, to)
 	if err == nil {
 		return report.Report{}, nil

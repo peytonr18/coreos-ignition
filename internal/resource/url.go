@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -34,7 +36,9 @@ import (
 	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/storage"
 	configErrors "github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/internal/distro"
 	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/systemd"
 	"github.com/flatcar/ignition/v2/internal/util"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -170,6 +174,8 @@ func (f *Fetcher) FetchToBuffer(u url.URL, opts FetchOptions) ([]byte, error) {
 		err = f.fetchFromTFTP(u, dest, opts)
 	case "data":
 		err = f.fetchFromDataURL(u, dest, opts)
+	case "oem":
+		err = f.fetchFromOEM(u, dest, opts)
 	case "s3", "arn":
 		buf := &s3buf{
 			WriteAtBuffer: aws.NewWriteAtBuffer([]byte{}),
@@ -242,6 +248,8 @@ func (f *Fetcher) Fetch(u url.URL, dest *os.File, opts FetchOptions) error {
 		return f.fetchFromTFTP(u, dest, opts)
 	case "data":
 		return f.fetchFromDataURL(u, dest, opts)
+	case "oem":
+		return f.fetchFromOEM(u, dest, opts)
 	case "s3", "arn":
 		return f.fetchFromS3(u, dest, opts)
 	case "gs":
@@ -448,6 +456,53 @@ func (f *Fetcher) fetchFromGCS(u url.URL, dest io.Writer, opts FetchOptions) err
 type s3target interface {
 	io.WriterAt
 	io.ReadSeeker
+}
+
+// FetchFromOEM gets data off the oem partition as described by u and writes it
+// into dest, returning an error if one is encountered.
+func (f *Fetcher) fetchFromOEM(u url.URL, dest io.Writer, opts FetchOptions) error {
+	path := filepath.Clean(u.Path)
+	if !filepath.IsAbs(path) {
+		f.Logger.Err("oem path is not absolute: %q", u.Path)
+		return ErrPathNotAbsolute
+	}
+
+	// check if present in OEM lookaside dir, if so use it.
+	absPath := filepath.Join(distro.OEMLookasideDir(), path)
+
+	if fi, err := os.Open(absPath); err == nil {
+		defer fi.Close()
+		return f.decompressCopyHashAndVerify(dest, fi, opts)
+	} else if !os.IsNotExist(err) {
+		f.Logger.Err("failed to read oem config: %v", err)
+		return ErrFailed
+	}
+
+	f.Logger.Info("oem config not found in %q, looking on oem partition",
+		distro.OEMLookasideDir())
+
+	oemMountPath, err := ioutil.TempDir("/mnt", "oem")
+	if err != nil {
+		f.Logger.Err("failed to create mount path for oem partition: %v", err)
+		return ErrFailed
+	}
+	// try oemMountPath, requires mounting it.
+	if err := f.mountOEM(oemMountPath); err != nil {
+		f.Logger.Err("failed to mount oem partition: %v", err)
+		return ErrFailed
+	}
+	defer os.Remove(oemMountPath)
+	defer f.umountOEM(oemMountPath)
+
+	absPath = filepath.Join(oemMountPath, path)
+	fi, err := os.Open(absPath)
+	if err != nil {
+		f.Logger.Err("failed to read oem config: %v", err)
+		return ErrFailed
+	}
+	defer fi.Close()
+
+	return f.decompressCopyHashAndVerify(dest, fi, opts)
 }
 
 // FetchFromS3 gets data from an S3 bucket as described by u and writes it into
@@ -724,4 +779,49 @@ func (f *Fetcher) parseARN(arnURL string) (string, string, string, string, error
 	bucket := bucketUrlSplit[len(bucketUrlSplit)-1]
 	key := strings.Join(urlSplit[1:], "/")
 	return bucket, key, "", regionHint, nil
+}
+
+// mountOEM waits for the presence of and mounts the oem partition at
+// oemMountPath. oemMountPath will be created if it does not exist.
+func (f *Fetcher) mountOEM(oemMountPath string) error {
+	dev := []string{distro.OEMDevicePath()}
+	if err := systemd.WaitOnDevices(context.Background(), dev, "oem-cmdline"); err != nil {
+		f.Logger.Err("failed to wait for oem device: %v", err)
+		return err
+	}
+
+	if err := os.MkdirAll(oemMountPath, 0700); err != nil {
+		f.Logger.Err("failed to create oem mount point: %v", err)
+		return err
+	}
+
+	if err := f.Logger.LogOp(
+		func() error {
+			return syscall.Mount(dev[0], oemMountPath, "ext4", 0, "")
+		},
+		"mounting %q at %q", distro.OEMDevicePath(), oemMountPath,
+	); err != nil {
+		f.Logger.Err("failed to mount ext4 device %q at %q, trying btrfs: %v",
+			distro.OEMDevicePath(), oemMountPath, err)
+		if err := f.Logger.LogOp(
+			func() error {
+				return syscall.Mount(dev[0], oemMountPath, "btrfs", 0, "")
+			},
+			"mounting %q at %q", distro.OEMDevicePath(), oemMountPath,
+		); err != nil {
+			return fmt.Errorf("failed to mount btrfs device %q at %q: %v",
+				distro.OEMDevicePath(), oemMountPath, err)
+		}
+	}
+
+	return nil
+}
+
+// umountOEM unmounts the oem partition at oemMountPath.
+func (f *Fetcher) umountOEM(oemMountPath string) {
+	// ignore the error for the linter
+	_ = f.Logger.LogOp(
+		func() error { return syscall.Unmount(oemMountPath, 0) },
+		"unmounting %q", oemMountPath,
+	)
 }

@@ -15,6 +15,8 @@
 package util
 
 import (
+	"strconv"
+
 	"github.com/flatcar/ignition/v2/config/shared/errors"
 
 	"github.com/coreos/go-semver/semver"
@@ -25,6 +27,7 @@ type versionStub struct {
 	Ignition struct {
 		Version string
 	}
+	IgnitionVersion int
 }
 
 // GetConfigVersion parses the version from the given raw config
@@ -38,7 +41,13 @@ func GetConfigVersion(raw []byte) (semver.Version, report.Report, error) {
 		return semver.Version{}, rpt, err
 	}
 
-	version, err := semver.NewVersion(stub.Ignition.Version)
+	v := stub.Ignition.Version
+	// if v is empty, it might be a version 1 configuration.
+	if v == "" {
+		v = strconv.Itoa(stub.IgnitionVersion) + ".0.0"
+	}
+
+	version, err := semver.NewVersion(v)
 	if err != nil {
 		return semver.Version{}, report.Report{}, errors.ErrInvalidVersion
 	}

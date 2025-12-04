@@ -27,7 +27,23 @@ import (
 
 func init() {
 	platform.Register(platform.Provider{
+		Name:  "cloudsigma",
+		Fetch: fetchConfig,
+	})
+	platform.Register(platform.Provider{
 		Name:  "metal",
+		Fetch: fetchConfig,
+	})
+	platform.Register(platform.Provider{
+		Name:  "rackspace",
+		Fetch: fetchConfig,
+	})
+	platform.Register(platform.Provider{
+		Name:  "rackspace-onmetal",
+		Fetch: fetchConfig,
+	})
+	platform.Register(platform.Provider{
+		Name:  "vagrant",
 		Fetch: fetchConfig,
 	})
 }

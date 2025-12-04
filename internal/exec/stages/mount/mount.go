@@ -118,6 +118,11 @@ func (s stage) mountFs(fs types.Filesystem) error {
 	// mount paths shouldn't include symlinks or other non-directories so we can use filepath.Join()
 	// instead of s.JoinPath(). Check that the resulting path is composed of only directories.
 	relpath := *fs.Path
+	// /usr/share/oem is now a symlink to /oem, so make sure we
+	// rather actually try to mount /oem
+	if relpath == "/usr/share/oem" && fs.Device == "/dev/disk/by-label/OEM" {
+		relpath = "/oem"
+	}
 	path := filepath.Join(s.DestDir, relpath)
 	if err := checkForNonDirectories(path); err != nil {
 		return err
