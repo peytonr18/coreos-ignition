@@ -15,8 +15,8 @@
 package util
 
 import (
-	"github.com/coreos/ignition/v2/config/util"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
 
 	"github.com/vincent-petithory/dataurl"
 )

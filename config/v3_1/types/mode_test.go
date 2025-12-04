@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/util"
 	"github.com/stretchr/testify/assert"
 )
 

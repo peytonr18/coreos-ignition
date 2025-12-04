@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
-	cutil "github.com/coreos/ignition/v2/config/util"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/distro"
-	"github.com/coreos/ignition/v2/internal/exec/util"
-	"github.com/coreos/ignition/v2/internal/log"
+	cutil "github.com/flatcar/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/distro"
+	"github.com/flatcar/ignition/v2/internal/exec/util"
+	"github.com/flatcar/ignition/v2/internal/log"
 
 	"github.com/vincent-petithory/dataurl"
 )
@@ -459,7 +459,7 @@ func (s stage) getOrderedCreationList(config types.Config) ([]filesystemEntry, e
 
 	// Append all the hard links to the list after sorting. This allows
 	// Ignition to create hard links to files that are deeper than the hard
-	// link. For reference: https://github.com/coreos/ignition/issues/800
+	// link. For reference: https://github.com/flatcar/ignition/issues/800
 	entries = append(entries, hardlinks...)
 
 	return entries, nil

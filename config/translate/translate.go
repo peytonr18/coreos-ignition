@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/coreos/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/util"
 )
 
 /*

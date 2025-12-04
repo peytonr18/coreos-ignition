@@ -27,14 +27,14 @@ import (
 	"sort"
 	"strings"
 
-	cutil "github.com/coreos/ignition/v2/config/util"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/distro"
-	"github.com/coreos/ignition/v2/internal/exec/stages"
-	"github.com/coreos/ignition/v2/internal/exec/util"
-	"github.com/coreos/ignition/v2/internal/log"
-	"github.com/coreos/ignition/v2/internal/resource"
-	"github.com/coreos/ignition/v2/internal/state"
+	cutil "github.com/flatcar/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/distro"
+	"github.com/flatcar/ignition/v2/internal/exec/stages"
+	"github.com/flatcar/ignition/v2/internal/exec/util"
+	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/resource"
+	"github.com/flatcar/ignition/v2/internal/state"
 )
 
 const (

@@ -15,13 +15,13 @@
 package v3_6_experimental
 
 import (
-	"github.com/coreos/ignition/v2/config/merge"
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/util"
-	prev "github.com/coreos/ignition/v2/config/v3_5"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/translate"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/config/validate"
+	"github.com/flatcar/ignition/v2/config/merge"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/util"
+	prev "github.com/flatcar/ignition/v2/config/v3_5"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/translate"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/config/validate"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/coreos/vcontext/report"

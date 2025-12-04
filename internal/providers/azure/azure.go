@@ -26,13 +26,13 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	execUtil "github.com/coreos/ignition/v2/internal/exec/util"
-	"github.com/coreos/ignition/v2/internal/log"
-	"github.com/coreos/ignition/v2/internal/platform"
-	"github.com/coreos/ignition/v2/internal/providers/util"
-	"github.com/coreos/ignition/v2/internal/resource"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	execUtil "github.com/flatcar/ignition/v2/internal/exec/util"
+	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/platform"
+	"github.com/flatcar/ignition/v2/internal/providers/util"
+	"github.com/flatcar/ignition/v2/internal/resource"
 
 	"github.com/coreos/vcontext/report"
 	"golang.org/x/sys/unix"
@@ -133,7 +133,7 @@ func fetchFromIMDS(f *resource.Fetcher) ([]byte, error) {
 	// Azure IMDS expects some codes <500 to still be retried...
 	// Here, we match the cloud-init set.
 	// https://github.com/canonical/cloud-init/commit/c1a2047cf291
-	// https://github.com/coreos/ignition/issues/1806
+	// https://github.com/flatcar/ignition/issues/1806
 	retryCodes := []int{
 		404, // not found
 		410, // gone

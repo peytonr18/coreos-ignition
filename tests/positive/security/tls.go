@@ -20,10 +20,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/coreos/ignition/v2/tests/fixtures"
-	"github.com/coreos/ignition/v2/tests/register"
-	"github.com/coreos/ignition/v2/tests/servers"
-	"github.com/coreos/ignition/v2/tests/types"
+	"github.com/flatcar/ignition/v2/tests/fixtures"
+	"github.com/flatcar/ignition/v2/tests/register"
+	"github.com/flatcar/ignition/v2/tests/servers"
+	"github.com/flatcar/ignition/v2/tests/types"
 
 	"github.com/vincent-petithory/dataurl"
 )

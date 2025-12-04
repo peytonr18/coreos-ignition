@@ -17,8 +17,8 @@ package v3_4
 import (
 	"testing"
 
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/v3_4/types"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/v3_4/types"
 	"github.com/stretchr/testify/assert"
 )
 

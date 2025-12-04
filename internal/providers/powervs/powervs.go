@@ -24,13 +24,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/distro"
-	"github.com/coreos/ignition/v2/internal/log"
-	"github.com/coreos/ignition/v2/internal/platform"
-	"github.com/coreos/ignition/v2/internal/providers/util"
-	"github.com/coreos/ignition/v2/internal/resource"
-	ut "github.com/coreos/ignition/v2/internal/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/distro"
+	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/platform"
+	"github.com/flatcar/ignition/v2/internal/providers/util"
+	"github.com/flatcar/ignition/v2/internal/resource"
+	ut "github.com/flatcar/ignition/v2/internal/util"
 
 	"github.com/coreos/vcontext/report"
 )

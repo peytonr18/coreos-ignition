@@ -25,10 +25,10 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/platform"
-	"github.com/coreos/ignition/v2/internal/providers/util"
-	"github.com/coreos/ignition/v2/internal/resource"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/platform"
+	"github.com/flatcar/ignition/v2/internal/providers/util"
+	"github.com/flatcar/ignition/v2/internal/resource"
 
 	"github.com/coreos/vcontext/report"
 )

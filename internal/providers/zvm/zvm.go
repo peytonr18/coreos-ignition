@@ -24,13 +24,13 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/distro"
-	"github.com/coreos/ignition/v2/internal/log"
-	"github.com/coreos/ignition/v2/internal/platform"
-	"github.com/coreos/ignition/v2/internal/providers/util"
-	"github.com/coreos/ignition/v2/internal/resource"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/distro"
+	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/platform"
+	"github.com/flatcar/ignition/v2/internal/providers/util"
+	"github.com/flatcar/ignition/v2/internal/resource"
 	"github.com/coreos/vcontext/report"
 )
 

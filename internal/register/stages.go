@@ -15,11 +15,11 @@
 package register
 
 import (
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/disks"
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/fetch"
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/fetch_offline"
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/files"
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/kargs"
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/mount"
-	_ "github.com/coreos/ignition/v2/internal/exec/stages/umount"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/disks"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/fetch"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/fetch_offline"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/files"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/kargs"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/mount"
+	_ "github.com/flatcar/ignition/v2/internal/exec/stages/umount"
 )

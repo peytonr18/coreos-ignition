@@ -28,13 +28,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/distro"
-	"github.com/coreos/ignition/v2/internal/log"
-	"github.com/coreos/ignition/v2/internal/platform"
-	"github.com/coreos/ignition/v2/internal/providers/util"
-	"github.com/coreos/ignition/v2/internal/resource"
-	ut "github.com/coreos/ignition/v2/internal/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/distro"
+	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/platform"
+	"github.com/flatcar/ignition/v2/internal/providers/util"
+	"github.com/flatcar/ignition/v2/internal/resource"
+	ut "github.com/flatcar/ignition/v2/internal/util"
 
 	"github.com/coreos/vcontext/report"
 )
@@ -66,7 +66,7 @@ func init() {
 func fetchConfig(f *resource.Fetcher) (types.Config, report.Report, error) {
 	// The fetch-offline approach doesn't work well here because of the "split
 	// personality" of this provider. See:
-	// https://github.com/coreos/ignition/issues/1081
+	// https://github.com/flatcar/ignition/issues/1081
 	if f.Offline {
 		return types.Config{}, report.Report{}, resource.ErrNeedNet
 	}

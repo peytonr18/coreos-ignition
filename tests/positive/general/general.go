@@ -17,9 +17,9 @@ package general
 import (
 	"strings"
 
-	"github.com/coreos/ignition/v2/tests/register"
-	"github.com/coreos/ignition/v2/tests/servers"
-	"github.com/coreos/ignition/v2/tests/types"
+	"github.com/flatcar/ignition/v2/tests/register"
+	"github.com/flatcar/ignition/v2/tests/servers"
+	"github.com/flatcar/ignition/v2/tests/types"
 )
 
 func init() {

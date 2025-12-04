@@ -19,8 +19,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/exec/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/exec/util"
 )
 
 func TestEntrySort(t *testing.T) {

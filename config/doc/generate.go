@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/coreos/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/util"
 )
 
 type generator struct {

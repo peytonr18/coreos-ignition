@@ -17,10 +17,10 @@ package types
 import (
 	"path"
 
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/shared/parse"
-	"github.com/coreos/ignition/v2/config/shared/validations"
-	"github.com/coreos/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/shared/parse"
+	"github.com/flatcar/ignition/v2/config/shared/validations"
+	"github.com/flatcar/ignition/v2/config/util"
 
 	cpath "github.com/coreos/vcontext/path"
 	"github.com/coreos/vcontext/report"

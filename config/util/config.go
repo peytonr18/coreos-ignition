@@ -15,7 +15,7 @@
 package util
 
 import (
-	"github.com/coreos/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/coreos/vcontext/report"

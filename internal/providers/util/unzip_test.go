@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coreos/ignition/v2/internal/providers/util"
+	"github.com/flatcar/ignition/v2/internal/providers/util"
 )
 
 func TestTryUnzip(t *testing.T) {

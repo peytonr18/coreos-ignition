@@ -30,12 +30,12 @@ import (
 	"strconv"
 	"strings"
 
-	cutil "github.com/coreos/ignition/v2/config/util"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
-	"github.com/coreos/ignition/v2/internal/distro"
-	"github.com/coreos/ignition/v2/internal/exec/util"
-	"github.com/coreos/ignition/v2/internal/sgdisk"
-	iutil "github.com/coreos/ignition/v2/internal/util"
+	cutil "github.com/flatcar/ignition/v2/config/util"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/internal/distro"
+	"github.com/flatcar/ignition/v2/internal/exec/util"
+	"github.com/flatcar/ignition/v2/internal/sgdisk"
+	iutil "github.com/flatcar/ignition/v2/internal/util"
 )
 
 var (

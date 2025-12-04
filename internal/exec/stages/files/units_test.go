@@ -18,8 +18,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coreos/ignition/v2/config/shared/errors"
-	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
+	"github.com/flatcar/ignition/v2/config/shared/errors"
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
 )
 
 func TestParseInstanceUnit(t *testing.T) {
