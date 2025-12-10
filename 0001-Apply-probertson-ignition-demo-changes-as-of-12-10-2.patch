@@ -1,0 +1,3013 @@
+From 33ed40f02c99f2b4f53d141371923b88d1beb040 Mon Sep 17 00:00:00 2001
+From: peytonr18 <peytonr18@sbcglobal.net>
+Date: Wed, 10 Dec 2025 22:44:27 +0000
+Subject: [PATCH] Apply probertson ignition demo changes as of 12/10/2025
+
+---
+ go.mod                                        |  17 +-
+ go.sum                                        |  68 +++-
+ internal/exec/engine.go                       |  42 +-
+ internal/main.go                              |  37 +-
+ internal/platform/platform.go                 |  10 +
+ internal/providers/azure/azure.go             | 367 +++++++++++++++---
+ internal/providers/azure/azure_test.go        | 304 +++++++++++++++
+ internal/providers/azure/crypt.go             | 304 +++++++++++++++
+ vendor/github.com/GehirnInc/crypt/.travis.yml |   7 +
+ vendor/github.com/GehirnInc/crypt/AUTHORS.md  |   8 +
+ vendor/github.com/GehirnInc/crypt/LICENSE     |  26 ++
+ vendor/github.com/GehirnInc/crypt/README.rst  |  61 +++
+ .../GehirnInc/crypt/apr1_crypt/apr1_crypt.go  |  39 ++
+ .../crypt/apr1_crypt/apr1_crypt_test.go       |  85 ++++
+ .../GehirnInc/crypt/common/base64.go          |  59 +++
+ .../github.com/GehirnInc/crypt/common/doc.go  |  10 +
+ .../github.com/GehirnInc/crypt/common/salt.go | 148 +++++++
+ .../GehirnInc/crypt/common/salt_test.go       |  49 +++
+ vendor/github.com/GehirnInc/crypt/crypt.go    | 121 ++++++
+ .../github.com/GehirnInc/crypt/crypt_test.go  |  16 +
+ vendor/github.com/GehirnInc/crypt/go.mod      |  11 +
+ vendor/github.com/GehirnInc/crypt/go.sum      |  17 +
+ .../GehirnInc/crypt/internal/utils.go         |  41 ++
+ .../GehirnInc/crypt/md5_crypt/md5_crypt.go    | 143 +++++++
+ .../crypt/md5_crypt/md5_crypt_test.go         |  85 ++++
+ .../crypt/sha256_crypt/sha256_crypt.go        | 173 +++++++++
+ .../crypt/sha256_crypt/sha256_crypt_test.go   | 106 +++++
+ .../crypt/sha512_crypt/sha512_crypt.go        | 188 +++++++++
+ .../crypt/sha512_crypt/sha512_crypt_test.go   | 108 ++++++
+ vendor/modules.txt                            |  10 +-
+ 30 files changed, 2563 insertions(+), 97 deletions(-)
+ create mode 100644 internal/providers/azure/azure_test.go
+ create mode 100644 internal/providers/azure/crypt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/.travis.yml
+ create mode 100644 vendor/github.com/GehirnInc/crypt/AUTHORS.md
+ create mode 100644 vendor/github.com/GehirnInc/crypt/LICENSE
+ create mode 100644 vendor/github.com/GehirnInc/crypt/README.rst
+ create mode 100644 vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt_test.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/common/base64.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/common/doc.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/common/salt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/common/salt_test.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/crypt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/crypt_test.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/go.mod
+ create mode 100644 vendor/github.com/GehirnInc/crypt/go.sum
+ create mode 100644 vendor/github.com/GehirnInc/crypt/internal/utils.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt_test.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt_test.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt.go
+ create mode 100644 vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt_test.go
+
+diff --git a/go.mod b/go.mod
+index 2afaf4ae..01299100 100644
+--- a/go.mod
++++ b/go.mod
+@@ -4,12 +4,17 @@ go 1.22.0
+ toolchain go1.23.6
+ 
+ require (
+-	cloud.google.com/go/compute/metadata v0.6.0
+-	cloud.google.com/go/storage v1.50.0
+-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2
+-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0
+-	github.com/aws/aws-sdk-go v1.55.6
+-	github.com/beevik/etree v1.5.0
++	cloud.google.com/go/compute/metadata v0.9.0
++	cloud.google.com/go/storage v1.57.0
++	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0
++	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.3
++	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
++	github.com/aws/aws-sdk-go-v2 v1.39.3
++	github.com/aws/aws-sdk-go-v2/credentials v1.18.17
++	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10
++	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.13
++	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.5
++	github.com/beevik/etree v1.6.0
+ 	github.com/containers/libhvee v0.10.0
+ 	github.com/coreos/go-semver v0.3.1
+ 	github.com/coreos/go-systemd/v22 v22.5.0
+diff --git a/go.sum b/go.sum
+index b26853e1..55e6ef07 100644
+--- a/go.sum
++++ b/go.sum
+@@ -35,22 +35,58 @@ github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0 h1:UXT0o77lXQrikd1kg
+ github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0/go.mod h1:cTvi54pg19DoT07ekoeMgE/taAwNtCShVeZqA+Iv2xI=
+ github.com/AzureAD/microsoft-authentication-extensions-for-go/cache v0.1.1 h1:WJTmL004Abzc5wDB5VtZG2PJk5ndYDgVacGqfirKxjM=
+ github.com/AzureAD/microsoft-authentication-extensions-for-go/cache v0.1.1/go.mod h1:tCcJZ0uHAmvjsVYzEFivsRTN00oz5BEsRgQHu5JZ9WE=
+-github.com/AzureAD/microsoft-authentication-library-for-go v1.3.3 h1:H5xDQaE3XowWfhZRUpnfC+rGZMEVoSiji+b+/HFAPU4=
+-github.com/AzureAD/microsoft-authentication-library-for-go v1.3.3/go.mod h1:wP83P5OoQ5p6ip3ScPr0BAq0BvuPAvacpEuSzyouqAI=
+-github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0 h1:3c8yed4lgqTt+oTQ+JNMDo+F4xprBf+O/il4ZC0nRLw=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0/go.mod h1:obipzmGjfSjam60XLwGfqUkJsfiheAl+TUjG+4yzyPM=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.48.1 h1:UQ0AhxogsIRZDkElkblfnwjc3IaltCm2HUMvezQaL7s=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.48.1/go.mod h1:jyqM3eLpJ3IbIFDTKVz2rF9T/xWGW0rIriGwnz8l9Tk=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.48.1 h1:oTX4vsorBZo/Zdum6OKPA4o7544hm6smoRv1QjpTwGo=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.48.1/go.mod h1:0wEl7vrAD8mehJyohS9HZy+WyEOaQO2mJx86Cvh93kM=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.1 h1:8nn+rsCvTq9axyEh382S0PFLBeaFwNsT43IrPWzctRU=
+-github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.1/go.mod h1:viRWSEhtMZqz1rhwmOVKkWl6SwmVowfL9O2YR5gI2PE=
+-github.com/ajeddeloh/go-json v0.0.0-20160803184958-73d058cf8437 h1:gZCtZ+Hh/e3CGEX8q/yAcp8wWu5ZS6NMk6VGzpQhI3s=
+-github.com/ajeddeloh/go-json v0.0.0-20160803184958-73d058cf8437/go.mod h1:otnto4/Icqn88WCcM4bhIJNSgsh9VLBuspyyCfvof9c=
+-github.com/aws/aws-sdk-go v1.8.39/go.mod h1:ZRmQr0FajVIyZ4ZzBYKG5P3ZqPz9IHG41ZoMu1ADI3k=
+-github.com/aws/aws-sdk-go v1.55.6 h1:cSg4pvZ3m8dgYcgqB97MrcdjUmZ1BeMYKUxMMB89IPk=
+-github.com/aws/aws-sdk-go v1.55.6/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
++github.com/AzureAD/microsoft-authentication-library-for-go v1.5.0 h1:XkkQbfMyuH2jTSjQjSoihryI8GINRcs4xp8lNawg0FI=
++github.com/AzureAD/microsoft-authentication-library-for-go v1.5.0/go.mod h1:HKpQxkWaGLJ+D/5H8QRpyQXA1eKjxkFlOMwck5+33Jk=
++github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 h1:IEjq88XO4PuBDcvmjQJcQGg+w+UaafSy8G5Kcb5tBhI=
++github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5/go.mod h1:exZ0C/1emQJAw5tHOaUDyY1ycttqBAPcxuzf7QbY6ec=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.29.0 h1:UQUsRi8WTzhZntp5313l+CHIAT95ojUI2lpP/ExlZa4=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.29.0/go.mod h1:Cz6ft6Dkn3Et6l2v2a9/RpN7epQ1GtDlO6lj8bEcOvw=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 h1:owcC2UnmsZycprQ5RfRgjydWhuoxg71LUfyiQdijZuM=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0/go.mod h1:ZPpqegjbE99EPKsu3iUWV22A04wzGPcAY/ziSIQEEgs=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.53.0 h1:4LP6hvB4I5ouTbGgWtixJhgED6xdf67twf9PoY96Tbg=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.53.0/go.mod h1:jUZ5LYlw40WMd07qxcQJD5M40aUxrfwqQX1g7zxYnrQ=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0 h1:Ron4zCA/yk6U7WOBXhTJcDpsUBG9npumK6xw2auFltQ=
++github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0/go.mod h1:cSgYe11MCNYunTnRXrKiR/tHc0eoKjICUuWpNZoVCOo=
++github.com/aws/aws-sdk-go-v2 v1.39.3 h1:h7xSsanJ4EQJXG5iuW4UqgP7qBopLpj84mpkNx3wPjM=
++github.com/aws/aws-sdk-go-v2 v1.39.3/go.mod h1:yWSxrnioGUZ4WVv9TgMrNUeLV3PFESn/v+6T/Su8gnM=
++github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.2 h1:t9yYsydLYNBk9cJ73rgPhPWqOh/52fcWDQB5b1JsKSY=
++github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.2/go.mod h1:IusfVNTmiSN3t4rhxWFaBAqn+mcNdwKtPcV16eYdgko=
++github.com/aws/aws-sdk-go-v2/config v1.31.13 h1:wcqQB3B0PgRPUF5ZE/QL1JVOyB0mbPevHFoAMpemR9k=
++github.com/aws/aws-sdk-go-v2/config v1.31.13/go.mod h1:ySB5D5ybwqGbT6c3GszZ+u+3KvrlYCUQNo62+hkKOFk=
++github.com/aws/aws-sdk-go-v2/credentials v1.18.17 h1:skpEwzN/+H8cdrrtT8y+rvWJGiWWv0DeNAe+4VTf+Vs=
++github.com/aws/aws-sdk-go-v2/credentials v1.18.17/go.mod h1:Ed+nXsaYa5uBINovJhcAWkALvXw2ZLk36opcuiSZfJM=
++github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10 h1:UuGVOX48oP4vgQ36oiKmW9RuSeT8jlgQgBFQD+HUiHY=
++github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10/go.mod h1:vM/Ini41PzvudT4YkQyE/+WiQJiQ6jzeDyU8pQKwCac=
++github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.13 h1:9XV2TkOvCs6Fis10b4scQbv/eDPhklhU/65GikPxXAA=
++github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.13/go.mod h1:X5gq64GsjuOIJRIUzR3x3Du96zUF+U1if3Qw/qNx1k8=
++github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.10 h1:mj/bdWleWEh81DtpdHKkw41IrS+r3uw1J/VQtbwYYp8=
++github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.10/go.mod h1:7+oEMxAZWP8gZCyjcm9VicI0M61Sx4DJtcGfKYv2yKQ=
++github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.10 h1:wh+/mn57yhUrFtLIxyFPh2RgxgQz/u+Yrf7hiHGHqKY=
++github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.10/go.mod h1:7zirD+ryp5gitJJ2m1BBux56ai8RIRDykXZrJSp540w=
++github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 h1:WKuaxf++XKWlHWu9ECbMlha8WOEGm0OUEZqm4K/Gcfk=
++github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4/go.mod h1:ZWy7j6v1vWGmPReu0iSGvRiise4YI5SkR3OHKTZ6Wuc=
++github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.10 h1:FHw90xCTsofzk6vjU808TSuDtDfOOKPNdz5Weyc3tUI=
++github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.10/go.mod h1:n8jdIE/8F3UYkg8O4IGkQpn2qUmapg/1K1yl29/uf/c=
++github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.2 h1:xtuxji5CS0JknaXoACOunXOYOQzgfTvGAc9s2QdCJA4=
++github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.2/go.mod h1:zxwi0DIR0rcRcgdbl7E2MSOvxDyyXGBlScvBkARFaLQ=
++github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.1 h1:ne+eepnDB2Wh5lHKzELgEncIqeVlQ1rSF9fEa4r5I+A=
++github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.1/go.mod h1:u0Jkg0L+dcG1ozUq21uFElmpbmjBnhHR5DELHIme4wg=
++github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.10 h1:DRND0dkCKtJzCj4Xl4OpVbXZgfttY5q712H9Zj7qc/0=
++github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.10/go.mod h1:tGGNmJKOTernmR2+VJ0fCzQRurcPZj9ut60Zu5Fi6us=
++github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.10 h1:DA+Hl5adieRyFvE7pCvBWm3VOZTRexGVkXw33SUqNoY=
++github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.10/go.mod h1:L+A89dH3/gr8L4ecrdzuXUYd1znoko6myzndVGZx/DA=
++github.com/aws/aws-sdk-go-v2/service/s3 v1.88.5 h1:FlGScxzCGNzT+2AvHT1ZGMvxTwAMa6gsooFb1pO/AiM=
++github.com/aws/aws-sdk-go-v2/service/s3 v1.88.5/go.mod h1:N/iojY+8bW3MYol9NUMuKimpSbPEur75cuI1SmtonFM=
++github.com/aws/aws-sdk-go-v2/service/sso v1.29.7 h1:fspVFg6qMx0svs40YgRmE7LZXh9VRZvTT35PfdQR6FM=
++github.com/aws/aws-sdk-go-v2/service/sso v1.29.7/go.mod h1:BQTKL3uMECaLaUV3Zc2L4Qybv8C6BIXjuu1dOPyxTQs=
++github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.2 h1:scVnW+NLXasGOhy7HhkdT9AGb6kjgW7fJ5xYkUaqHs0=
++github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.2/go.mod h1:FRNCY3zTEWZXBKm2h5UBUPvCVDOecTad9KhynDyGBc0=
++github.com/aws/aws-sdk-go-v2/service/sts v1.38.7 h1:VEO5dqFkMsl8QZ2yHsFDJAIZLAkEbaYDB+xdKi0Feic=
++github.com/aws/aws-sdk-go-v2/service/sts v1.38.7/go.mod h1:L1xxV3zAdB+qVrVW/pBIrIAnHFWHo6FBbFe4xOGsG/o=
++github.com/aws/smithy-go v1.23.1 h1:sLvcH6dfAFwGkHLZ7dGiYF7aK6mg4CgKA/iDKjLDt9M=
++github.com/aws/smithy-go v1.23.1/go.mod h1:LEj2LM3rBRQJxPZTB4KuzZkaZYnZPnvgIhb4pu07mx0=
++github.com/beevik/etree v1.6.0 h1:u8Kwy8pp9D9XeITj2Z0XtA5qqZEmtJtuXZRQi+j03eE=
++github.com/beevik/etree v1.6.0/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=
+ github.com/beevik/etree v1.5.0 h1:iaQZFSDS+3kYZiGoc9uKeOkUY3nYMXOKLl6KIJxiJWs=
+ github.com/beevik/etree v1.5.0/go.mod h1:gPNJNaBGVZ9AwsidazFZyygnd+0pAU38N4D+WemwKNs=
+ github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
+diff --git a/internal/exec/engine.go b/internal/exec/engine.go
+index dcadb091..1cb59934 100644
+--- a/internal/exec/engine.go
++++ b/internal/exec/engine.go
+@@ -55,14 +55,15 @@ var (
+ 
+ // Engine represents the entity that fetches and executes a configuration.
+ type Engine struct {
+-	ConfigCache    string
+-	FetchTimeout   time.Duration
+-	Logger         *log.Logger
+-	NeedNet        string
+-	Root           string
+-	PlatformConfig platform.Config
+-	Fetcher        *resource.Fetcher
+-	State          *state.State
++	ConfigCache         string
++	FetchTimeout        time.Duration
++	GenerateCloudConfig bool
++	Logger              *log.Logger
++	NeedNet             string
++	Root                string
++	PlatformConfig      platform.Config
++	Fetcher             *resource.Fetcher
++	State               *state.State
+ }
+ 
+ // Run executes the stage of the given name. It returns true if the stage
+@@ -286,6 +287,10 @@ func (e *Engine) acquireProviderConfig() (cfg types.Config, err error) {
+ // is unavailable. This will also render the config (see renderConfig) before
+ // returning.
+ func (e *Engine) fetchProviderConfig() (types.Config, error) {
++	if e.GenerateCloudConfig {
++		return e.fetchGeneratedConfig()
++	}
++
+ 	platformConfigs := []platform.Config{
+ 		cmdline.Config,
+ 		system.Config,
+@@ -331,6 +336,27 @@ func (e *Engine) fetchProviderConfig() (types.Config, error) {
+ 	return configFetcher.RenderConfig(cfg)
+ }
+ 
++func (e *Engine) fetchGeneratedConfig() (types.Config, error) {
++	cfg, err := e.PlatformConfig.GenerateConfig(e.Fetcher)
++	if err != nil {
++		return types.Config{}, err
++	}
++
++	e.State.FetchedConfigs = append(e.State.FetchedConfigs, state.FetchedConfig{
++		Kind:       "user",
++		Source:     fmt.Sprintf("%s-generator", e.PlatformConfig.Name()),
++		Referenced: false,
++	})
++
++	configFetcher := ConfigFetcher{
++		Logger:  e.Logger,
++		Fetcher: e.Fetcher,
++		State:   e.State,
++	}
++
++	return configFetcher.RenderConfig(cfg)
++}
++
+ func (e *Engine) signalNeedNet() error {
+ 	if err := executil.MkdirForFile(e.NeedNet); err != nil {
+ 		return err
+diff --git a/internal/main.go b/internal/main.go
+index fa945f1b..7b7b8eb5 100644
+--- a/internal/main.go
++++ b/internal/main.go
+@@ -48,20 +48,22 @@ func main() {
+ 
+ func ignitionMain() {
+ 	flags := struct {
+-		configCache  string
+-		fetchTimeout time.Duration
+-		needNet      string
+-		platform     platform.Name
+-		root         string
+-		stage        stages.Name
+-		stateFile    string
+-		version      bool
+-		logToStdout  bool
++		configCache         string
++		fetchTimeout        time.Duration
++		generateCloudConfig bool
++		needNet             string
++		platform            platform.Name
++		root                string
++		stage               stages.Name
++		stateFile           string
++		version             bool
++		logToStdout         bool
+ 	}{}
+ 
+ 	flag.StringVar(&flags.configCache, "config-cache", "/run/ignition.json", "where to cache the config")
+ 	flag.DurationVar(&flags.fetchTimeout, "fetch-timeout", exec.DefaultFetchTimeout, "initial duration for which to wait for config")
+ 	flag.StringVar(&flags.needNet, "neednet", "/run/ignition/neednet", "flag file to write from fetch-offline if networking is needed")
++	flag.BoolVar(&flags.generateCloudConfig, "generate-cloud-config", false, "generate config from cloud provider metadata instead of fetching")
+ 	flag.Var(&flags.platform, "platform", fmt.Sprintf("current platform. %v", platform.Names()))
+ 	flag.StringVar(&flags.root, "root", "/", "root of the filesystem")
+ 	flag.Var(&flags.stage, "stage", fmt.Sprintf("execution stage. %v", stages.Names()))
+@@ -104,14 +106,15 @@ func ignitionMain() {
+ 		os.Exit(3)
+ 	}
+ 	engine := exec.Engine{
+-		Root:           flags.root,
+-		FetchTimeout:   flags.fetchTimeout,
+-		Logger:         &logger,
+-		NeedNet:        flags.needNet,
+-		ConfigCache:    flags.configCache,
+-		PlatformConfig: platformConfig,
+-		Fetcher:        &fetcher,
+-		State:          &state,
++		Root:                flags.root,
++		FetchTimeout:        flags.fetchTimeout,
++		GenerateCloudConfig: flags.generateCloudConfig,
++		Logger:              &logger,
++		NeedNet:             flags.needNet,
++		ConfigCache:         flags.configCache,
++		PlatformConfig:      platformConfig,
++		Fetcher:             &fetcher,
++		State:               &state,
+ 	}
+ 
+ 	err = engine.Run(flags.stage.String())
+diff --git a/internal/platform/platform.go b/internal/platform/platform.go
+index beb6d447..fbad2894 100644
+--- a/internal/platform/platform.go
++++ b/internal/platform/platform.go
+@@ -49,6 +49,9 @@ type Provider struct {
+ 	Status     func(stageName string, f resource.Fetcher, e error) error
+ 	DelConfig  func(f *resource.Fetcher) error
+ 
++	// Generates a platform-specific Ignition config from cloud provider metadata.
++	GenerateCloudConfig func(f *resource.Fetcher) (types.Config, error)
++
+ 	// Fetch, and also save output files to be written during files stage.
+ 	// Avoid, unless you're certain you need it.
+ 	FetchWithFiles func(f *resource.Fetcher) ([]types.File, types.Config, report.Report, error)
+@@ -104,6 +107,13 @@ func (c Config) DelConfig(f *resource.Fetcher) error {
+ 	}
+ }
+ 
++func (c Config) GenerateConfig(f *resource.Fetcher) (types.Config, error) {
++	if c.p.GenerateCloudConfig != nil {
++		return c.p.GenerateCloudConfig(f)
++	}
++	return types.Config{}, ErrNoProvider
++}
++
+ var configs = registry.Create("platform configs")
+ 
+ func Register(provider Provider) {
+diff --git a/internal/providers/azure/azure.go b/internal/providers/azure/azure.go
+index b426332d..1c897f67 100644
+--- a/internal/providers/azure/azure.go
++++ b/internal/providers/azure/azure.go
+@@ -18,21 +18,27 @@ package azure
+ 
+ import (
+ 	"encoding/base64"
++	"encoding/json"
++	"encoding/xml"
+ 	"fmt"
+ 	"net/http"
+ 	"net/url"
+ 	"os"
+ 	"path/filepath"
++	"strconv"
++	"strings"
+ 	"time"
+ 
+ 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+-	"github.com/flatcar/ignition/v2/config/shared/errors"
+-	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
+-	execUtil "github.com/flatcar/ignition/v2/internal/exec/util"
+-	"github.com/flatcar/ignition/v2/internal/log"
+-	"github.com/flatcar/ignition/v2/internal/platform"
+-	"github.com/flatcar/ignition/v2/internal/providers/util"
+-	"github.com/flatcar/ignition/v2/internal/resource"
++	"github.com/coreos/ignition/v2/config/shared/errors"
++	cfgutil "github.com/coreos/ignition/v2/config/util"
++	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
++	execUtil "github.com/coreos/ignition/v2/internal/exec/util"
++	"github.com/coreos/ignition/v2/internal/log"
++	"github.com/coreos/ignition/v2/internal/platform"
++	"github.com/coreos/ignition/v2/internal/providers/util"
++	"github.com/coreos/ignition/v2/internal/resource"
++	"github.com/vincent-petithory/dataurl"
+ 
+ 	"github.com/coreos/vcontext/report"
+ 	"golang.org/x/sys/unix"
+@@ -68,13 +74,26 @@ var (
+ 		Path:     "metadata/instance/compute/userData",
+ 		RawQuery: "api-version=2021-01-01&format=text",
+ 	}
++	imdsInstanceURL = url.URL{
++		Scheme:   "http",
++		Host:     "169.254.169.254",
++		Path:     "metadata/instance",
++		RawQuery: "api-version=2021-01-01&format=json&extended=true",
++	}
+ )
+ 
++var imdsRetryCodes = []int{
++	404,
++	410,
++	429,
++}
++
+ func init() {
+ 	platform.Register(platform.Provider{
+-		Name:       "azure",
+-		NewFetcher: newFetcher,
+-		Fetch:      fetchConfig,
++		Name:                "azure",
++		NewFetcher:          newFetcher,
++		Fetch:               fetchConfig,
++		GenerateCloudConfig: generateCloudConfig,
+ 	})
+ }
+ 
+@@ -133,13 +152,8 @@ func fetchFromIMDS(f *resource.Fetcher) ([]byte, error) {
+ 	// Azure IMDS expects some codes <500 to still be retried...
+ 	// Here, we match the cloud-init set.
+ 	// https://github.com/canonical/cloud-init/commit/c1a2047cf291
+-	// https://github.com/flatcar/ignition/issues/1806
+-	retryCodes := []int{
+-		404, // not found
+-		410, // gone
+-		429, // rate-limited
+-	}
+-	data, err := f.FetchToBuffer(imdsUserdataURL, resource.FetchOptions{Headers: headers, RetryCodes: retryCodes})
++	// https://github.com/coreos/ignition/issues/1806
++	data, err := f.FetchToBuffer(imdsUserdataURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
+ 	if err != nil {
+ 		return nil, fmt.Errorf("fetching to buffer: %w", err)
+ 	}
+@@ -200,38 +214,8 @@ func FetchFromOvfDevice(f *resource.Fetcher, ovfFsTypes []string) (types.Config,
+ // getRawConfig returns the config by mounting the given block device
+ func getRawConfig(f *resource.Fetcher, devicePath string, fstype string) ([]byte, error) {
+ 	logger := f.Logger
+-	mnt, err := os.MkdirTemp("", "ignition-azure")
+-	if err != nil {
+-		return nil, fmt.Errorf("failed to create temp directory: %v", err)
+-	}
+-	defer os.Remove(mnt)
+-
+-	logger.Debug("mounting config device")
+-	if err := logger.LogOp(
+-		func() error { return unix.Mount(devicePath, mnt, fstype, unix.MS_RDONLY, "") },
+-		"mounting %q at %q", devicePath, mnt,
+-	); err != nil {
+-		return nil, fmt.Errorf("failed to mount device %q at %q: %v", devicePath, mnt, err)
+-	}
+-	defer func() {
+-		_ = logger.LogOp(
+-			func() error { return unix.Unmount(mnt, 0) },
+-			"unmounting %q at %q", devicePath, mnt,
+-		)
+-	}()
+-
+-	// detect the config drive by looking for a file which is always present
+-	logger.Debug("checking for config drive")
+-	if _, err := os.Stat(filepath.Join(mnt, "ovf-env.xml")); err != nil {
+-		return nil, fmt.Errorf("device %q does not appear to be a config drive: %v", devicePath, err)
+-	}
+-
+ 	logger.Debug("reading config")
+-	rawConfig, err := os.ReadFile(filepath.Join(mnt, configPath))
+-	if err != nil && !os.IsNotExist(err) {
+-		return nil, fmt.Errorf("failed to read config from device %q: %v", devicePath, err)
+-	}
+-	return rawConfig, nil
++	return readFileFromDevice(f, devicePath, fstype, configPath)
+ }
+ 
+ // isCdromPresent verifies if the given config drive is CD-ROM
+@@ -269,3 +253,290 @@ func isCdromPresent(logger *log.Logger, devicePath string) bool {
+ 
+ 	return (status == CDS_DISC_OK)
+ }
++func readFileFromDevice(f *resource.Fetcher, devicePath string, fstype string, relativePath string) ([]byte, error) {
++	logger := f.Logger
++	mnt, err := os.MkdirTemp("", "ignition-azure")
++	if err != nil {
++		return nil, fmt.Errorf("failed to create temp directory: %v", err)
++	}
++	defer func() {
++		if removeErr := os.Remove(mnt); removeErr != nil {
++			logger.Warning("failed to remove temp directory %q: %v", mnt, removeErr)
++		}
++	}()
++
++	logger.Debug("mounting config device")
++	if err := logger.LogOp(
++		func() error { return unix.Mount(devicePath, mnt, fstype, unix.MS_RDONLY, "") },
++		"mounting %q at %q", devicePath, mnt,
++	); err != nil {
++		return nil, fmt.Errorf("failed to mount device %q at %q: %v", devicePath, mnt, err)
++	}
++	defer func() {
++		_ = logger.LogOp(
++			func() error { return unix.Unmount(mnt, 0) },
++			"unmounting %q at %q", devicePath, mnt,
++		)
++	}()
++
++	logger.Debug("checking for config drive")
++	if _, err := os.Stat(filepath.Join(mnt, "ovf-env.xml")); err != nil {
++		return nil, fmt.Errorf("device %q does not appear to be a config drive: %v", devicePath, err)
++	}
++
++	target := filepath.Join(mnt, strings.TrimPrefix(relativePath, "/"))
++	data, err := os.ReadFile(target)
++	if err != nil {
++		if os.IsNotExist(err) {
++			return nil, nil
++		}
++		return nil, fmt.Errorf("failed to read %q from device %q: %v", relativePath, devicePath, err)
++	}
++	return data, nil
++}
++
++type instanceMetadata struct {
++	Compute instanceComputeMetadata `json:"compute"`
++}
++
++type instanceComputeMetadata struct {
++	Hostname   string              `json:"hostname"`
++	OSProfile  instanceOSProfile   `json:"osProfile"`
++	PublicKeys []instancePublicKey `json:"publicKeys"`
++}
++
++type instanceOSProfile struct {
++	AdminUsername string `json:"adminUsername"`
++}
++
++type instancePublicKey struct {
++	KeyData string `json:"keyData"`
++}
++
++type provisioningEnvelope struct {
++	LinuxProvisioningConfigurationSet linuxProvisioningConfigurationSet `xml:"LinuxProvisioningConfigurationSet"`
++}
++
++type linuxProvisioningConfigurationSet struct {
++	HostName                         string     `xml:"HostName"`
++	UserName                         string     `xml:"UserName"`
++	UserPassword                     string     `xml:"UserPassword"`
++	DisableSshPasswordAuthentication string     `xml:"DisableSshPasswordAuthentication"`
++	SSH                              sshSection `xml:"SSH"`
++	CustomData                       string     `xml:"CustomData"`
++	UserData                         string     `xml:"UserData"`
++}
++
++type sshSection struct {
++	PublicKeys []sshPublicKey `xml:"PublicKeys>PublicKey"`
++}
++
++type sshPublicKey struct {
++	Value string `xml:"Value"`
++}
++
++func (l linuxProvisioningConfigurationSet) passwordAuthDisabled() bool {
++	val := strings.ToLower(strings.TrimSpace(l.DisableSshPasswordAuthentication))
++	switch val {
++	case "true", "1", "yes":
++		return true
++	case "false", "0", "no", "":
++		return false
++	default:
++		// Try parsing as bool for any other values
++		disabled, err := strconv.ParseBool(val)
++		if err != nil {
++			return false
++		}
++		return disabled
++	}
++}
++
++func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
++	meta, err := fetchInstanceMetadata(f)
++	if err != nil {
++		return types.Config{}, fmt.Errorf("fetching instance metadata: %w", err)
++	}
++
++	ovfRaw, err := readOvfEnvironment(f, []string{CDS_FSTYPE_UDF})
++	if err != nil {
++		return types.Config{}, fmt.Errorf("reading provisioning metadata: %w", err)
++	}
++	if len(ovfRaw) == 0 {
++		return types.Config{}, fmt.Errorf("ovf-env.xml was empty")
++	}
++
++	provisioning, err := parseProvisioningConfig(ovfRaw)
++	if err != nil {
++		return types.Config{}, fmt.Errorf("parsing provisioning metadata: %w", err)
++	}
++
++	return buildGeneratedConfig(meta, provisioning)
++}
++
++func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
++	headers := make(http.Header)
++	headers.Set("Metadata", "true")
++	data, err := f.FetchToBuffer(imdsInstanceURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
++	if err != nil {
++		return nil, fmt.Errorf("fetching metadata: %w", err)
++	}
++
++	var meta instanceMetadata
++	if err := json.Unmarshal(data, &meta); err != nil {
++		return nil, fmt.Errorf("decoding metadata: %w", err)
++	}
++	return &meta, nil
++}
++
++const (
++	// maxOvfRetries is the maximum number of attempts to find the OVF environment
++	maxOvfRetries = 30
++	// ovfRetryInterval is the time between retries
++	ovfRetryInterval = time.Second
++)
++
++func readOvfEnvironment(f *resource.Fetcher, ovfFsTypes []string) ([]byte, error) {
++	logger := f.Logger
++	checkedDevices := make(map[string]struct{})
++
++	for attempt := 0; attempt < maxOvfRetries; attempt++ {
++		for _, ovfFsType := range ovfFsTypes {
++			devices, err := execUtil.GetBlockDevices(ovfFsType)
++			if err != nil {
++				return nil, fmt.Errorf("failed to retrieve block devices with FSTYPE=%q: %v", ovfFsType, err)
++			}
++			for _, dev := range devices {
++				if _, checked := checkedDevices[dev]; checked {
++					continue
++				}
++				if isCdromPresent(logger, dev) {
++					data, err := readFileFromDevice(f, dev, ovfFsType, "ovf-env.xml")
++					if err != nil {
++						logger.Debug("failed to read ovf environment from device %q: %v", dev, err)
++					} else if len(data) > 0 {
++						return data, nil
++					}
++				}
++				checkedDevices[dev] = struct{}{}
++			}
++		}
++		if attempt < maxOvfRetries-1 {
++			time.Sleep(ovfRetryInterval)
++		}
++	}
++
++	return nil, fmt.Errorf("failed to find OVF environment after %d attempts", maxOvfRetries)
++}
++
++func parseProvisioningConfig(raw []byte) (*linuxProvisioningConfigurationSet, error) {
++	var env provisioningEnvelope
++	if err := xml.Unmarshal(raw, &env); err != nil {
++		return nil, err
++	}
++	return &env.LinuxProvisioningConfigurationSet, nil
++}
++
++func buildGeneratedConfig(meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) (types.Config, error) {
++	username := strings.TrimSpace(meta.Compute.OSProfile.AdminUsername)
++	if username == "" {
++		username = strings.TrimSpace(provisioning.UserName)
++	}
++	if username == "" {
++		return types.Config{}, fmt.Errorf("unable to determine admin username from metadata or provisioning data")
++	}
++
++	password := strings.TrimSpace(provisioning.UserPassword)
++	passwordAuthDisabled := provisioning.passwordAuthDisabled()
++
++	sshKeys := collectSSHPublicKeys(meta, provisioning)
++
++	user := types.PasswdUser{
++		Name:              username,
++		Groups:            []types.Group{"wheel"},
++		HomeDir:           cfgutil.StrToPtr(fmt.Sprintf("/home/%s", username)),
++		Shell:             cfgutil.StrToPtr("/bin/bash"),
++		SSHAuthorizedKeys: sshKeys,
++	}
++	if password != "" {
++		// Hash the password if it's not already hashed
++		var passwordHash string
++		if IsPasswordHashed(password) {
++			passwordHash = password
++		} else {
++			var err error
++			passwordHash, err = HashPassword(password)
++			if err != nil {
++				return types.Config{}, fmt.Errorf("hashing password: %w", err)
++			}
++		}
++		user.PasswordHash = cfgutil.StrToPtr(passwordHash)
++	}
++
++	sudoersFile := newDataFile("/etc/sudoers.d/99_wheel_nopasswd", 0440, "%wheel ALL=(ALL) NOPASSWD:ALL\n")
++	passwordSetting := "yes"
++	if passwordAuthDisabled {
++		passwordSetting = "no"
++	}
++	sshConfig := fmt.Sprintf(`# Custom SSHD settings
++PasswordAuthentication %s
++PermitRootLogin no
++AllowUsers %s
++`, passwordSetting, username)
++	sshdFile := newDataFile("/etc/ssh/sshd_config.d/10-custom.conf", 0644, sshConfig)
++
++	return types.Config{
++		Ignition: types.Ignition{
++			Version: types.MaxVersion.String(),
++		},
++		Passwd: types.Passwd{
++			Users: []types.PasswdUser{user},
++		},
++		Storage: types.Storage{
++			Files: []types.File{sudoersFile, sshdFile},
++		},
++	}, nil
++}
++
++func collectSSHPublicKeys(meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) []types.SSHAuthorizedKey {
++	seen := make(map[string]struct{})
++	var keys []types.SSHAuthorizedKey
++
++	addKey := func(keyData string) {
++		key := strings.TrimSpace(keyData)
++		if key == "" {
++			return
++		}
++		if _, ok := seen[key]; !ok {
++			seen[key] = struct{}{}
++			keys = append(keys, types.SSHAuthorizedKey(key))
++		}
++	}
++
++	if meta != nil {
++		for _, k := range meta.Compute.PublicKeys {
++			addKey(k.KeyData)
++		}
++	}
++
++	if provisioning != nil {
++		for _, pk := range provisioning.SSH.PublicKeys {
++			addKey(pk.Value)
++		}
++	}
++
++	return keys
++}
++
++func newDataFile(path string, mode int, contents string) types.File {
++	encoded := dataurl.EncodeBytes([]byte(contents))
++	return types.File{
++		Node: types.Node{
++			Path: path,
++		},
++		FileEmbedded1: types.FileEmbedded1{
++			Mode:     cfgutil.IntToPtr(mode),
++			Contents: types.Resource{Source: &encoded},
++		},
++	}
++}
+\ No newline at end of file
+diff --git a/internal/providers/azure/azure_test.go b/internal/providers/azure/azure_test.go
+new file mode 100644
+index 00000000..716d1aeb
+--- /dev/null
++++ b/internal/providers/azure/azure_test.go
+@@ -0,0 +1,304 @@
++package azure
++
++import (
++	"strings"
++	"testing"
++)
++
++func TestParseProvisioningConfig(t *testing.T) {
++	raw := []byte(`
++<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
++  <LinuxProvisioningConfigurationSet>
++    <HostName>myhost</HostName>
++    <UserName>azureuser</UserName>
++    <UserPassword>password</UserPassword>
++    <DisableSshPasswordAuthentication>false</DisableSshPasswordAuthentication>
++    <SSH>
++      <PublicKeys>
++        <PublicKey>
++          <Value>ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCu</Value>
++        </PublicKey>
++      </PublicKeys>
++    </SSH>
++  </LinuxProvisioningConfigurationSet>
++</wa:ProvisioningSection>`)
++
++	cfg, err := parseProvisioningConfig(raw)
++	if err != nil {
++		t.Fatalf("parseProvisioningConfig() err = %v", err)
++	}
++	if cfg.UserName != "azureuser" {
++		t.Fatalf("expected username azureuser, got %s", cfg.UserName)
++	}
++	if len(cfg.SSH.PublicKeys) != 1 {
++		t.Fatalf("expected 1 ssh key, got %d", len(cfg.SSH.PublicKeys))
++	}
++}
++
++func TestParseProvisioningConfigErrors(t *testing.T) {
++	tests := []struct {
++		name string
++		xml  []byte
++	}{
++		{
++			name: "malformed XML",
++			xml: []byte(`<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
++				<LinuxProvisioningConfigurationSet>
++					<UserName>testuser
++				</LinuxProvisioningConfigurationSet>
++			</wa:ProvisioningSection>`),
++		},
++		{
++			name: "empty XML",
++			xml:  []byte(``),
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			_, err := parseProvisioningConfig(tt.xml)
++			if err == nil {
++				t.Fatalf("expected error for %s", tt.name)
++			}
++		})
++	}
++}
++
++func TestBuildGeneratedConfig(t *testing.T) {
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			Hostname: "example",
++			OSProfile: instanceOSProfile{
++				AdminUsername: "meta-user",
++			},
++			PublicKeys: []instancePublicKey{
++				{KeyData: "ssh-rsa AAAAB3Nza meta"},
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserName: "prov-user",
++		SSH: sshSection{
++			PublicKeys: []sshPublicKey{
++				{Value: "ssh-ed25519 AAAAC3Nza prov"},
++			},
++		},
++		UserPassword: "plaintext",
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++
++	if len(cfg.Passwd.Users) != 1 {
++		t.Fatalf("expected 1 user, got %d", len(cfg.Passwd.Users))
++	}
++	user := cfg.Passwd.Users[0]
++	if user.Name != "meta-user" {
++		t.Fatalf("expected user meta-user, got %s", user.Name)
++	}
++	if len(user.SSHAuthorizedKeys) != 2 {
++		t.Fatalf("expected 2 ssh keys, got %d", len(user.SSHAuthorizedKeys))
++	}
++	// Password should be hashed (starts with $6$ for SHA-512)
++	if user.PasswordHash == nil {
++		t.Fatalf("expected password hash to be set")
++	}
++	if !strings.HasPrefix(*user.PasswordHash, "$6$") {
++		t.Fatalf("expected password hash to be SHA-512 (start with $6$), got %s", *user.PasswordHash)
++	}
++
++	if len(cfg.Storage.Files) != 2 {
++		t.Fatalf("expected 2 files, got %d", len(cfg.Storage.Files))
++	}
++}
++
++func TestBuildGeneratedConfigWithPrehashedPassword(t *testing.T) {
++	// Test that pre-hashed passwords are not double-hashed
++	prehashedPassword := "$6$rounds=5000$saltsalt$hashedvalue"
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "testuser",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserPassword: prehashedPassword,
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++
++	user := cfg.Passwd.Users[0]
++	if user.PasswordHash == nil || *user.PasswordHash != prehashedPassword {
++		t.Fatalf("expected pre-hashed password to be preserved, got %v", user.PasswordHash)
++	}
++}
++
++func TestBuildGeneratedConfigErrors(t *testing.T) {
++	meta := &instanceMetadata{}
++	prov := &linuxProvisioningConfigurationSet{}
++	if _, err := buildGeneratedConfig(meta, prov); err == nil {
++		t.Fatalf("expected error when username missing")
++	}
++}
++
++func TestBuildGeneratedConfigUsernamePriority(t *testing.T) {
++	// Test that IMDS AdminUsername takes priority over OVF UserName
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "imds-admin",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserName: "ovf-user",
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++	if cfg.Passwd.Users[0].Name != "imds-admin" {
++		t.Fatalf("expected IMDS username 'imds-admin' to take priority, got %s", cfg.Passwd.Users[0].Name)
++	}
++}
++
++func TestBuildGeneratedConfigUsernameFallback(t *testing.T) {
++	// Test fallback to OVF UserName when IMDS AdminUsername is empty
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserName: "ovf-user",
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++	if cfg.Passwd.Users[0].Name != "ovf-user" {
++		t.Fatalf("expected OVF username 'ovf-user' as fallback, got %s", cfg.Passwd.Users[0].Name)
++	}
++}
++
++func TestBuildGeneratedConfigNoPassword(t *testing.T) {
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "testuser",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++	if cfg.Passwd.Users[0].PasswordHash != nil {
++		t.Fatalf("expected nil password hash when no password provided, got %v", *cfg.Passwd.Users[0].PasswordHash)
++	}
++}
++
++func TestCollectSSHPublicKeysDedup(t *testing.T) {
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			PublicKeys: []instancePublicKey{
++				{KeyData: "ssh-rsa AAAA"},
++				{KeyData: "ssh-rsa AAAA"},
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		SSH: sshSection{
++			PublicKeys: []sshPublicKey{
++				{Value: "ssh-rsa BBBB"},
++				{Value: "ssh-rsa AAAA"},
++			},
++		},
++	}
++	keys := collectSSHPublicKeys(meta, prov)
++	if len(keys) != 2 {
++		t.Fatalf("expected 2 unique keys, got %d", len(keys))
++	}
++}
++
++func TestPasswordAuthDisabledParsing(t *testing.T) {
++	trueCases := []string{"true", "TRUE", "1", " yes ", "YES"}
++	for _, tc := range trueCases {
++		prov := linuxProvisioningConfigurationSet{DisableSshPasswordAuthentication: tc}
++		if !prov.passwordAuthDisabled() {
++			t.Fatalf("expected %q to disable password auth", tc)
++		}
++	}
++	falseCases := []string{"false", "0", "no", "", "NO", "False"}
++	for _, tc := range falseCases {
++		prov := linuxProvisioningConfigurationSet{DisableSshPasswordAuthentication: tc}
++		if prov.passwordAuthDisabled() {
++			t.Fatalf("expected %q to allow password auth", tc)
++		}
++	}
++}
++
++func TestHashPassword(t *testing.T) {
++	password := "testpassword123"
++	hash, err := HashPassword(password)
++	if err != nil {
++		t.Fatalf("HashPassword() err = %v", err)
++	}
++
++	// Verify hash format
++	if !strings.HasPrefix(hash, "$6$") {
++		t.Fatalf("expected SHA-512 hash prefix $6$, got %s", hash)
++	}
++
++	// Verify hash has expected structure: $6$<salt>$<hash>
++	parts := strings.Split(hash, "$")
++	if len(parts) != 4 {
++		t.Fatalf("expected 4 parts in hash, got %d: %s", len(parts), hash)
++	}
++	if parts[1] != "6" {
++		t.Fatalf("expected algorithm identifier '6', got %s", parts[1])
++	}
++	if len(parts[2]) != 16 {
++		t.Fatalf("expected 16 character salt, got %d: %s", len(parts[2]), parts[2])
++	}
++	if len(parts[3]) != 86 {
++		t.Fatalf("expected 86 character hash, got %d: %s", len(parts[3]), parts[3])
++	}
++}
++
++func TestIsPasswordHashed(t *testing.T) {
++	tests := []struct {
++		password string
++		expected bool
++	}{
++		{"$6$salt$hash", true},
++		{"$5$salt$hash", true},
++		{"$y$salt$hash", true},
++		{"$2a$10$hash", true},
++		{"$2b$10$hash", true},
++		{"$2y$10$hash", true},
++		{"$1$salt$hash", true},
++		{"plaintext", false},
++		{"$invalid", false},
++		{"", false},
++	}
++
++	for _, tt := range tests {
++		result := IsPasswordHashed(tt.password)
++		if result != tt.expected {
++			t.Errorf("IsPasswordHashed(%q) = %v, expected %v", tt.password, result, tt.expected)
++		}
++	}
++}
+\ No newline at end of file
+diff --git a/internal/providers/azure/crypt.go b/internal/providers/azure/crypt.go
+new file mode 100644
+index 00000000..716d1aeb
+--- /dev/null
++++ b/internal/providers/azure/crypt.go
+@@ -0,0 +1,304 @@
++package azure
++
++import (
++	"strings"
++	"testing"
++)
++
++func TestParseProvisioningConfig(t *testing.T) {
++	raw := []byte(`
++<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
++  <LinuxProvisioningConfigurationSet>
++    <HostName>myhost</HostName>
++    <UserName>azureuser</UserName>
++    <UserPassword>password</UserPassword>
++    <DisableSshPasswordAuthentication>false</DisableSshPasswordAuthentication>
++    <SSH>
++      <PublicKeys>
++        <PublicKey>
++          <Value>ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCu</Value>
++        </PublicKey>
++      </PublicKeys>
++    </SSH>
++  </LinuxProvisioningConfigurationSet>
++</wa:ProvisioningSection>`)
++
++	cfg, err := parseProvisioningConfig(raw)
++	if err != nil {
++		t.Fatalf("parseProvisioningConfig() err = %v", err)
++	}
++	if cfg.UserName != "azureuser" {
++		t.Fatalf("expected username azureuser, got %s", cfg.UserName)
++	}
++	if len(cfg.SSH.PublicKeys) != 1 {
++		t.Fatalf("expected 1 ssh key, got %d", len(cfg.SSH.PublicKeys))
++	}
++}
++
++func TestParseProvisioningConfigErrors(t *testing.T) {
++	tests := []struct {
++		name string
++		xml  []byte
++	}{
++		{
++			name: "malformed XML",
++			xml: []byte(`<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
++				<LinuxProvisioningConfigurationSet>
++					<UserName>testuser
++				</LinuxProvisioningConfigurationSet>
++			</wa:ProvisioningSection>`),
++		},
++		{
++			name: "empty XML",
++			xml:  []byte(``),
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			_, err := parseProvisioningConfig(tt.xml)
++			if err == nil {
++				t.Fatalf("expected error for %s", tt.name)
++			}
++		})
++	}
++}
++
++func TestBuildGeneratedConfig(t *testing.T) {
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			Hostname: "example",
++			OSProfile: instanceOSProfile{
++				AdminUsername: "meta-user",
++			},
++			PublicKeys: []instancePublicKey{
++				{KeyData: "ssh-rsa AAAAB3Nza meta"},
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserName: "prov-user",
++		SSH: sshSection{
++			PublicKeys: []sshPublicKey{
++				{Value: "ssh-ed25519 AAAAC3Nza prov"},
++			},
++		},
++		UserPassword: "plaintext",
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++
++	if len(cfg.Passwd.Users) != 1 {
++		t.Fatalf("expected 1 user, got %d", len(cfg.Passwd.Users))
++	}
++	user := cfg.Passwd.Users[0]
++	if user.Name != "meta-user" {
++		t.Fatalf("expected user meta-user, got %s", user.Name)
++	}
++	if len(user.SSHAuthorizedKeys) != 2 {
++		t.Fatalf("expected 2 ssh keys, got %d", len(user.SSHAuthorizedKeys))
++	}
++	// Password should be hashed (starts with $6$ for SHA-512)
++	if user.PasswordHash == nil {
++		t.Fatalf("expected password hash to be set")
++	}
++	if !strings.HasPrefix(*user.PasswordHash, "$6$") {
++		t.Fatalf("expected password hash to be SHA-512 (start with $6$), got %s", *user.PasswordHash)
++	}
++
++	if len(cfg.Storage.Files) != 2 {
++		t.Fatalf("expected 2 files, got %d", len(cfg.Storage.Files))
++	}
++}
++
++func TestBuildGeneratedConfigWithPrehashedPassword(t *testing.T) {
++	// Test that pre-hashed passwords are not double-hashed
++	prehashedPassword := "$6$rounds=5000$saltsalt$hashedvalue"
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "testuser",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserPassword: prehashedPassword,
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++
++	user := cfg.Passwd.Users[0]
++	if user.PasswordHash == nil || *user.PasswordHash != prehashedPassword {
++		t.Fatalf("expected pre-hashed password to be preserved, got %v", user.PasswordHash)
++	}
++}
++
++func TestBuildGeneratedConfigErrors(t *testing.T) {
++	meta := &instanceMetadata{}
++	prov := &linuxProvisioningConfigurationSet{}
++	if _, err := buildGeneratedConfig(meta, prov); err == nil {
++		t.Fatalf("expected error when username missing")
++	}
++}
++
++func TestBuildGeneratedConfigUsernamePriority(t *testing.T) {
++	// Test that IMDS AdminUsername takes priority over OVF UserName
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "imds-admin",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserName: "ovf-user",
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++	if cfg.Passwd.Users[0].Name != "imds-admin" {
++		t.Fatalf("expected IMDS username 'imds-admin' to take priority, got %s", cfg.Passwd.Users[0].Name)
++	}
++}
++
++func TestBuildGeneratedConfigUsernameFallback(t *testing.T) {
++	// Test fallback to OVF UserName when IMDS AdminUsername is empty
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		UserName: "ovf-user",
++	}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++	if cfg.Passwd.Users[0].Name != "ovf-user" {
++		t.Fatalf("expected OVF username 'ovf-user' as fallback, got %s", cfg.Passwd.Users[0].Name)
++	}
++}
++
++func TestBuildGeneratedConfigNoPassword(t *testing.T) {
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			OSProfile: instanceOSProfile{
++				AdminUsername: "testuser",
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{}
++
++	cfg, err := buildGeneratedConfig(meta, prov)
++	if err != nil {
++		t.Fatalf("buildGeneratedConfig() err = %v", err)
++	}
++	if cfg.Passwd.Users[0].PasswordHash != nil {
++		t.Fatalf("expected nil password hash when no password provided, got %v", *cfg.Passwd.Users[0].PasswordHash)
++	}
++}
++
++func TestCollectSSHPublicKeysDedup(t *testing.T) {
++	meta := &instanceMetadata{
++		Compute: instanceComputeMetadata{
++			PublicKeys: []instancePublicKey{
++				{KeyData: "ssh-rsa AAAA"},
++				{KeyData: "ssh-rsa AAAA"},
++			},
++		},
++	}
++	prov := &linuxProvisioningConfigurationSet{
++		SSH: sshSection{
++			PublicKeys: []sshPublicKey{
++				{Value: "ssh-rsa BBBB"},
++				{Value: "ssh-rsa AAAA"},
++			},
++		},
++	}
++	keys := collectSSHPublicKeys(meta, prov)
++	if len(keys) != 2 {
++		t.Fatalf("expected 2 unique keys, got %d", len(keys))
++	}
++}
++
++func TestPasswordAuthDisabledParsing(t *testing.T) {
++	trueCases := []string{"true", "TRUE", "1", " yes ", "YES"}
++	for _, tc := range trueCases {
++		prov := linuxProvisioningConfigurationSet{DisableSshPasswordAuthentication: tc}
++		if !prov.passwordAuthDisabled() {
++			t.Fatalf("expected %q to disable password auth", tc)
++		}
++	}
++	falseCases := []string{"false", "0", "no", "", "NO", "False"}
++	for _, tc := range falseCases {
++		prov := linuxProvisioningConfigurationSet{DisableSshPasswordAuthentication: tc}
++		if prov.passwordAuthDisabled() {
++			t.Fatalf("expected %q to allow password auth", tc)
++		}
++	}
++}
++
++func TestHashPassword(t *testing.T) {
++	password := "testpassword123"
++	hash, err := HashPassword(password)
++	if err != nil {
++		t.Fatalf("HashPassword() err = %v", err)
++	}
++
++	// Verify hash format
++	if !strings.HasPrefix(hash, "$6$") {
++		t.Fatalf("expected SHA-512 hash prefix $6$, got %s", hash)
++	}
++
++	// Verify hash has expected structure: $6$<salt>$<hash>
++	parts := strings.Split(hash, "$")
++	if len(parts) != 4 {
++		t.Fatalf("expected 4 parts in hash, got %d: %s", len(parts), hash)
++	}
++	if parts[1] != "6" {
++		t.Fatalf("expected algorithm identifier '6', got %s", parts[1])
++	}
++	if len(parts[2]) != 16 {
++		t.Fatalf("expected 16 character salt, got %d: %s", len(parts[2]), parts[2])
++	}
++	if len(parts[3]) != 86 {
++		t.Fatalf("expected 86 character hash, got %d: %s", len(parts[3]), parts[3])
++	}
++}
++
++func TestIsPasswordHashed(t *testing.T) {
++	tests := []struct {
++		password string
++		expected bool
++	}{
++		{"$6$salt$hash", true},
++		{"$5$salt$hash", true},
++		{"$y$salt$hash", true},
++		{"$2a$10$hash", true},
++		{"$2b$10$hash", true},
++		{"$2y$10$hash", true},
++		{"$1$salt$hash", true},
++		{"plaintext", false},
++		{"$invalid", false},
++		{"", false},
++	}
++
++	for _, tt := range tests {
++		result := IsPasswordHashed(tt.password)
++		if result != tt.expected {
++			t.Errorf("IsPasswordHashed(%q) = %v, expected %v", tt.password, result, tt.expected)
++		}
++	}
++}
+\ No newline at end of file
+diff --git a/vendor/github.com/GehirnInc/crypt/.travis.yml b/vendor/github.com/GehirnInc/crypt/.travis.yml
+new file mode 100644
+index 00000000..73cb5d0e
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/.travis.yml
+@@ -0,0 +1,7 @@
++language: go
++go:
++  - 1.6.x
++  - 1.7.x
++  - master
++script:
++  - go test -v -race ./...
+diff --git a/vendor/github.com/GehirnInc/crypt/AUTHORS.md b/vendor/github.com/GehirnInc/crypt/AUTHORS.md
+new file mode 100644
+index 00000000..50dc18ee
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/AUTHORS.md
+@@ -0,0 +1,8 @@
++### Initial author
++
++[Jeramey Crawford](https://github.com/jeramey)
++
++### Other authors
++
++- [Jonas mg](https://github.com/kless)
++- [Kohei YOSHIDA](https://github.com/yosida95)
+diff --git a/vendor/github.com/GehirnInc/crypt/LICENSE b/vendor/github.com/GehirnInc/crypt/LICENSE
+new file mode 100644
+index 00000000..61d04ef2
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/LICENSE
+@@ -0,0 +1,26 @@
++Copyright (c) 2012, Jeramey Crawford <jeramey@antihe.ro>
++All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++
++  * Redistributions of source code must retain the above copyright
++    notice, this list of conditions and the following disclaimer.
++
++  * Redistributions in binary form must reproduce the above copyright
++    notice, this list of conditions and the following disclaimer in
++    the documentation and/or other materials provided with the
++    distribution.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+diff --git a/vendor/github.com/GehirnInc/crypt/README.rst b/vendor/github.com/GehirnInc/crypt/README.rst
+new file mode 100644
+index 00000000..60828d97
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/README.rst
+@@ -0,0 +1,61 @@
++.. image:: https://travis-ci.org/GehirnInc/crypt.svg?branch=master
++    :target: https://travis-ci.org/GehirnInc/crypt
++
++crypt - A password hashing library for Go
++=========================================
++crypt provides pure golang implementations of UNIX's crypt(3).
++
++The goal of crypt is to bring a library of many common and popular password
++hashing algorithms to Go and to provide a simple and consistent interface to
++each of them. As every hashing method is implemented in pure Go, this library
++should be as portable as Go itself.
++
++All hashing methods come with a test suite which verifies their operation
++against itself as well as the output of other password hashing implementations
++to ensure compatibility with them.
++
++I hope you find this library to be useful and easy to use!
++
++Install
++-------
++
++To install crypt, use the *go get* command.
++
++.. code-block:: sh
++
++   go get github.com/GehirnInc/crypt
++
++
++Usage
++-----
++
++.. code-block:: go
++
++    package main
++
++    import (
++    	"fmt"
++
++    	"github.com/GehirnInc/crypt"
++    	_ "github.com/GehirnInc/crypt/sha256_crypt"
++    )
++
++    func main() {
++    	crypt := crypt.SHA256.New()
++    	ret, _ := crypt.Generate([]byte("secret"), []byte("$5$salt"))
++    	fmt.Println(ret)
++
++    	err := crypt.Verify(ret, []byte("secret"))
++    	fmt.Println(err)
++
++    	// Output:
++    	// $5$salt$kpa26zwgX83BPSR8d7w93OIXbFt/d3UOTZaAu5vsTM6
++    	// <nil>
++    }
++
++Documentation
++-------------
++
++The documentation is available on GoDoc_.
++
++.. _GoDoc: https://godoc.org/github.com/GehirnInc/crypt
+diff --git a/vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt.go b/vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt.go
+new file mode 100644
+index 00000000..19004f1b
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt.go
+@@ -0,0 +1,39 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// Package apr1_crypt implements the standard Unix MD5-crypt algorithm created
++// by Poul-Henning Kamp for FreeBSD, and modified by the Apache project.
++//
++// The only change from MD5-crypt is the use of the magic constant "$apr1$"
++// instead of "$1$". The algorithms are otherwise identical.
++package apr1_crypt
++
++import (
++	"github.com/GehirnInc/crypt"
++	"github.com/GehirnInc/crypt/common"
++	"github.com/GehirnInc/crypt/md5_crypt"
++)
++
++func init() {
++	crypt.RegisterCrypt(crypt.APR1, New, MagicPrefix)
++}
++
++const (
++	MagicPrefix   = "$apr1$"
++	SaltLenMin    = 1
++	SaltLenMax    = 8
++	RoundsDefault = 1000
++)
++
++// New returns a new crypt.Crypter computing the variant "apr1" of MD5-crypt
++func New() crypt.Crypter {
++	crypter := md5_crypt.New()
++	crypter.SetSalt(common.Salt{
++		MagicPrefix:   []byte(MagicPrefix),
++		SaltLenMin:    SaltLenMin,
++		SaltLenMax:    SaltLenMax,
++		RoundsDefault: RoundsDefault,
++	})
++	return crypter
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt_test.go b/vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt_test.go
+new file mode 100644
+index 00000000..e3a62cea
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/apr1_crypt/apr1_crypt_test.go
+@@ -0,0 +1,85 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package apr1_crypt
++
++import "testing"
++
++var apr1Crypt = New()
++
++func TestGenerate(t *testing.T) {
++	data := []struct {
++		salt []byte
++		key  []byte
++		out  string
++	}{
++		{
++			[]byte("$apr1$$"),
++			[]byte("abcdefghijk"),
++			"$apr1$$NTjzQjNZnhYRPxN6ryN191",
++		},
++		{
++			[]byte("$apr1$an overlong salt$"),
++			[]byte("abcdefgh"),
++			"$apr1$an overl$iroRZrWCEoQojCkf6p8LC0",
++		},
++		{
++			[]byte("$apr1$12345678$"),
++			[]byte("Lorem ipsum dolor sit amet"),
++			"$apr1$12345678$/DpfgRGBHG8N0cbkmw0Fk/",
++		},
++		{
++			[]byte("$apr1$deadbeef$"),
++			[]byte("password"),
++			"$apr1$deadbeef$NWLhx1Ai4ScyoaAboTFco.",
++		},
++		{
++			[]byte("$apr1$$"),
++			[]byte("missing salt"),
++			"$apr1$$EcorjwkoQz4mYcksVEk6j0",
++		},
++		{
++			[]byte("$apr1$holy-moly-batman$"),
++			[]byte("1234567"),
++			"$apr1$holy-mol$/WX0350ZUEkvQkrrVJsrU.",
++		},
++		{
++			[]byte("$apr1$asdfjkl;$"),
++			[]byte("A really long password. " +
++				"Longer than a password has any righ" +
++				"t to be. Hey bub, don't mess with t" +
++				"his password."),
++			"$apr1$asdfjkl;$2MbDUb/Bj6qcIIf38PXzp0",
++		},
++	}
++	for i, d := range data {
++		hash, err := apr1Crypt.Generate(d.key, d.salt)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if hash != d.out {
++			t.Errorf("Test %d failed\nExpected: %s, got: %s", i, d.out, hash)
++		}
++	}
++}
++
++func TestVerify(t *testing.T) {
++	data := [][]byte{
++		[]byte("password"),
++		[]byte("12345"),
++		[]byte("That's amazing! I've got the same combination on my luggage!"),
++		[]byte("And change the combination on my luggage!"),
++		[]byte("         random  spa  c    ing."),
++		[]byte("94ajflkvjzpe8u3&*j1k513KLJ&*()"),
++	}
++	for i, d := range data {
++		hash, err := apr1Crypt.Generate(d, nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if err = apr1Crypt.Verify(hash, d); err != nil {
++			t.Errorf("Test %d failed: %s", i, d)
++		}
++	}
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/common/base64.go b/vendor/github.com/GehirnInc/crypt/common/base64.go
+new file mode 100644
+index 00000000..64d6cc52
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/common/base64.go
+@@ -0,0 +1,59 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package common
++
++const (
++	alphabet = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
++)
++
++// Base64_24Bit is a variant of Base64 encoding, commonly used with password
++// hashing algorithms to encode the result of their checksum output.
++//
++// The algorithm operates on up to 3 bytes at a time, encoding the following
++// 6-bit sequences into up to 4 hash64 ASCII bytes.
++//
++//   1. Bottom 6 bits of the first byte
++//   2. Top 2 bits of the first byte, and bottom 4 bits of the second byte.
++//   3. Top 4 bits of the second byte, and bottom 2 bits of the third byte.
++//   4. Top 6 bits of the third byte.
++//
++// This encoding method does not emit padding bytes as Base64 does.
++func Base64_24Bit(src []byte) []byte {
++	if len(src) == 0 {
++		return []byte{} // TODO: return nil
++	}
++
++	dstlen := (len(src)*8 + 5) / 6
++	dst := make([]byte, dstlen)
++
++	di, si := 0, 0
++	n := len(src) / 3 * 3
++	for si < n {
++		val := uint(src[si+2])<<16 | uint(src[si+1])<<8 | uint(src[si])
++		dst[di+0] = alphabet[val&0x3f]
++		dst[di+1] = alphabet[val>>6&0x3f]
++		dst[di+2] = alphabet[val>>12&0x3f]
++		dst[di+3] = alphabet[val>>18]
++		di += 4
++		si += 3
++	}
++
++	rem := len(src) - si
++	if rem == 0 {
++		return dst
++	}
++
++	val := uint(src[si+0])
++	if rem == 2 {
++		val |= uint(src[si+1]) << 8
++	}
++
++	dst[di+0] = alphabet[val&0x3f]
++	dst[di+1] = alphabet[val>>6&0x3f]
++	if rem == 2 {
++		dst[di+2] = alphabet[val>>12]
++	}
++	return dst
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/common/doc.go b/vendor/github.com/GehirnInc/crypt/common/doc.go
+new file mode 100644
+index 00000000..b2556ef6
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/common/doc.go
+@@ -0,0 +1,10 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// Package common contains routines used by multiple password hashing
++// algorithms.
++//
++// Generally, you will never import this package directly. Many of the
++// *_crypt packages will import this package if they require it.
++package common
+diff --git a/vendor/github.com/GehirnInc/crypt/common/salt.go b/vendor/github.com/GehirnInc/crypt/common/salt.go
+new file mode 100644
+index 00000000..ca06fa10
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/common/salt.go
+@@ -0,0 +1,148 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package common
++
++import (
++	"bytes"
++	"crypto/rand"
++	"errors"
++	"strconv"
++)
++
++var (
++	ErrSaltPrefix = errors.New("invalid magic prefix")
++	ErrSaltFormat = errors.New("invalid salt format")
++	ErrSaltRounds = errors.New("invalid rounds")
++)
++
++const (
++	roundsPrefix = "rounds="
++)
++
++// Salt represents a salt.
++type Salt struct {
++	MagicPrefix []byte
++
++	SaltLenMin int
++	SaltLenMax int
++
++	RoundsMin     int
++	RoundsMax     int
++	RoundsDefault int
++}
++
++// Generate generates a random salt of a given length.
++//
++// The length is set thus:
++//
++//   length > SaltLenMax: length = SaltLenMax
++//   length < SaltLenMin: length = SaltLenMin
++func (s *Salt) Generate(length int) []byte {
++	if length > s.SaltLenMax {
++		length = s.SaltLenMax
++	} else if length < s.SaltLenMin {
++		length = s.SaltLenMin
++	}
++
++	saltLen := (length * 6 / 8)
++	if (length*6)%8 != 0 {
++		saltLen += 1
++	}
++	salt := make([]byte, saltLen)
++	rand.Read(salt)
++
++	out := make([]byte, len(s.MagicPrefix)+length)
++	copy(out, s.MagicPrefix)
++	copy(out[len(s.MagicPrefix):], Base64_24Bit(salt))
++	return out
++}
++
++// GenerateWRounds creates a random salt with the random bytes being of the
++// length provided, and the rounds parameter set as specified.
++//
++// The parameters are set thus:
++//
++//   length > SaltLenMax: length = SaltLenMax
++//   length < SaltLenMin: length = SaltLenMin
++//
++//   rounds < 0: rounds = RoundsDefault
++//   rounds < RoundsMin: rounds = RoundsMin
++//   rounds > RoundsMax: rounds = RoundsMax
++//
++// If rounds is equal to RoundsDefault, then the "rounds=" part of the salt is
++// removed.
++func (s *Salt) GenerateWRounds(length, rounds int) []byte {
++	if length > s.SaltLenMax {
++		length = s.SaltLenMax
++	} else if length < s.SaltLenMin {
++		length = s.SaltLenMin
++	}
++	if rounds < 0 {
++		rounds = s.RoundsDefault
++	} else if rounds < s.RoundsMin {
++		rounds = s.RoundsMin
++	} else if rounds > s.RoundsMax {
++		rounds = s.RoundsMax
++	}
++
++	saltLen := (length * 6 / 8)
++	if (length*6)%8 != 0 {
++		saltLen += 1
++	}
++	salt := make([]byte, saltLen)
++	rand.Read(salt)
++
++	roundsText := ""
++	if rounds != s.RoundsDefault {
++		roundsText = roundsPrefix + strconv.Itoa(rounds) + "$"
++	}
++
++	out := make([]byte, len(s.MagicPrefix)+len(roundsText)+length)
++	copy(out, s.MagicPrefix)
++	copy(out[len(s.MagicPrefix):], []byte(roundsText))
++	copy(out[len(s.MagicPrefix)+len(roundsText):], Base64_24Bit(salt))
++	return out
++}
++
++func (s *Salt) Decode(raw []byte) (salt []byte, rounds int, isRoundsDef bool, rest []byte, err error) {
++	tokens := bytes.SplitN(raw, []byte{'$'}, 4)
++	if len(tokens) < 3 {
++		err = ErrSaltFormat
++		return
++	}
++	if !bytes.HasPrefix(raw, s.MagicPrefix) {
++		err = ErrSaltPrefix
++		return
++	}
++
++	if bytes.HasPrefix(tokens[2], []byte(roundsPrefix)) {
++		if len(tokens) < 4 {
++			err = ErrSaltFormat
++			return
++		}
++		salt = tokens[3]
++
++		rounds, err = strconv.Atoi(string(tokens[2][len(roundsPrefix):]))
++		if err != nil {
++			err = ErrSaltRounds
++			return
++		}
++		if rounds < s.RoundsMin {
++			rounds = s.RoundsMin
++		}
++		if rounds > s.RoundsMax {
++			rounds = s.RoundsMax
++		}
++		isRoundsDef = true
++	} else {
++		salt = tokens[2]
++		rounds = s.RoundsDefault
++	}
++	if len(salt) > s.SaltLenMax {
++		salt = salt[0:s.SaltLenMax]
++	}
++
++	return
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/common/salt_test.go b/vendor/github.com/GehirnInc/crypt/common/salt_test.go
+new file mode 100644
+index 00000000..eb656eb9
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/common/salt_test.go
+@@ -0,0 +1,49 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package common
++
++import (
++	"testing"
++	"fmt"
++	"strings"
++)
++
++var _Salt = &Salt{
++	MagicPrefix: []byte("$foo$"),
++	SaltLenMin:  1,
++	SaltLenMax:  8,
++	RoundsDefault: 5,
++	RoundsMin: 1,
++	RoundsMax: 10,
++}
++
++func TestGenerateSalt(t *testing.T) {
++	salt := _Salt.Generate(0)
++	if len(salt) != len(_Salt.MagicPrefix)+1 {
++		t.Errorf("Expected len 1, got len %d", len(salt))
++	}
++
++	for i := 1; i <= 8; i++ {
++		salt = _Salt.Generate(i)
++		if len(salt) != len(_Salt.MagicPrefix)+i {
++			t.Errorf("Expected len %d, got len %d", i, len(salt))
++		}
++	}
++
++	salt = _Salt.Generate(9)
++	if len(salt) != len(_Salt.MagicPrefix)+8 {
++		t.Errorf("Expected len 8, got len %d", len(salt))
++	}
++}
++
++func TestGenerateSaltWRounds(t *testing.T) {
++	rounds := 7
++	expectPrefix := fmt.Sprintf("%srounds=%d$", _Salt.MagicPrefix, 7)
++
++	salt := _Salt.GenerateWRounds(10, rounds)
++	if !strings.HasPrefix(string(salt), expectPrefix) {
++		t.Errorf("Expected it has prefix \"%s\", but missing it", expectPrefix)
++	}
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/crypt.go b/vendor/github.com/GehirnInc/crypt/crypt.go
+new file mode 100644
+index 00000000..c9e73545
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/crypt.go
+@@ -0,0 +1,121 @@
++// (C) Copyright 2013, Jonas mg. All rights reserved.
++// Use of this source code is governed by a BSD-style license
++// that can be found in the LICENSE file.
++
++// Package crypt provides interface for password crypt functions and collects
++// common constants.
++package crypt
++
++import (
++	"errors"
++	"strings"
++
++	"github.com/GehirnInc/crypt/common"
++)
++
++var ErrKeyMismatch = errors.New("hashed value is not the hash of the given password")
++
++// Crypter is the common interface implemented by all crypt functions.
++type Crypter interface {
++	// Generate performs the hashing algorithm, returning a full hash suitable
++	// for storage and later password verification.
++	//
++	// If the salt is empty, a randomly-generated salt will be generated with a
++	// length of SaltLenMax and number RoundsDefault of rounds.
++	//
++	// Any error only can be got when the salt argument is not empty.
++	Generate(key, salt []byte) (string, error)
++
++	// Verify compares a hashed key with its possible key equivalent.
++	// Returns nil on success, or an error on failure; if the hashed key is
++	// diffrent, the error is "ErrKeyMismatch".
++	Verify(hashedKey string, key []byte) error
++
++	// Cost returns the hashing cost (in rounds) used to create the given hashed
++	// key.
++	//
++	// When, in the future, the hashing cost of a key needs to be increased in
++	// order to adjust for greater computational power, this function allows one
++	// to establish which keys need to be updated.
++	//
++	// The algorithms based in MD5-crypt use a fixed value of rounds.
++	Cost(hashedKey string) (int, error)
++
++	// SetSalt sets a different salt. It is used to easily create derivated
++	// algorithms, i.e. "apr1_crypt" from "md5_crypt".
++	SetSalt(salt common.Salt)
++}
++
++// Crypt identifies a crypt function that is implemented in another package.
++type Crypt uint
++
++const (
++	APR1   Crypt = 1 + iota // import github.com/GehirnInc/crypt/apr1_crypt
++	MD5                     // import github.com/GehirnInc/crypt/md5_crypt
++	SHA256                  // import github.com/GehirnInc/crypt/sha256_crypt
++	SHA512                  // import github.com/GehirnInc/crypt/sha512_crypt
++	maxCrypt
++)
++
++var crypts = make([]func() Crypter, maxCrypt)
++
++// New returns new Crypter making the Crypt c.
++// New panics if the Crypt c is unavailable.
++func (c Crypt) New() Crypter {
++	if c > 0 && c < maxCrypt {
++		f := crypts[c]
++		if f != nil {
++			return f()
++		}
++	}
++	panic("crypt: requested crypt function is unavailable")
++}
++
++// Available reports whether the Crypt c is available.
++func (c Crypt) Available() bool {
++	return c > 0 && c < maxCrypt && crypts[c] != nil
++}
++
++var cryptPrefixes = make([]string, maxCrypt)
++
++// RegisterCrypt registers a function that returns a new instance of the given
++// crypt function. This is intended to be called from the init function in
++// packages that implement crypt functions.
++func RegisterCrypt(c Crypt, f func() Crypter, prefix string) {
++	if c >= maxCrypt {
++		panic("crypt: RegisterHash of unknown crypt function")
++	}
++	crypts[c] = f
++	cryptPrefixes[c] = prefix
++}
++
++// New returns a new crypter.
++func New(c Crypt) Crypter {
++	return c.New()
++}
++
++// IsHashSupported returns true if hashedKey has a supported prefix.
++// NewFromHash will not panic for this hashedKey
++func IsHashSupported(hashedKey string) bool {
++	for i := range cryptPrefixes {
++		prefix := cryptPrefixes[i]
++		if crypts[i] != nil && strings.HasPrefix(hashedKey, prefix) {
++			return true
++		}
++	}
++
++	return false
++}
++
++// NewFromHash returns a new Crypter using the prefix in the given hashed key.
++func NewFromHash(hashedKey string) Crypter {
++	for i := range cryptPrefixes {
++		prefix := cryptPrefixes[i]
++		if crypts[i] != nil && strings.HasPrefix(hashedKey, prefix) {
++			crypt := Crypt(uint(i))
++			return crypt.New()
++		}
++	}
++
++	panic("crypt: unknown crypt function")
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/crypt_test.go b/vendor/github.com/GehirnInc/crypt/crypt_test.go
+new file mode 100644
+index 00000000..a4b61554
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/crypt_test.go
+@@ -0,0 +1,16 @@
++package crypt_test
++
++import (
++	"testing"
++
++	"github.com/GehirnInc/crypt"
++	_ "github.com/GehirnInc/crypt/apr1_crypt"
++	"github.com/stretchr/testify/assert"
++)
++
++func TestIsHashSupported(t *testing.T) {
++	apr1 := crypt.IsHashSupported("$apr1$salt$hash")
++	assert.True(t, apr1)
++	other := crypt.IsHashSupported("$unknown$salt$hash")
++	assert.False(t, other)
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/go.mod b/vendor/github.com/GehirnInc/crypt/go.mod
+new file mode 100644
+index 00000000..dab7c6ee
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/go.mod
+@@ -0,0 +1,11 @@
++module github.com/GehirnInc/crypt
++
++go 1.19
++
++require github.com/stretchr/testify v1.8.2
++
++require (
++	github.com/davecgh/go-spew v1.1.1 // indirect
++	github.com/pmezard/go-difflib v1.0.0 // indirect
++	gopkg.in/yaml.v3 v3.0.1 // indirect
++)
+diff --git a/vendor/github.com/GehirnInc/crypt/go.sum b/vendor/github.com/GehirnInc/crypt/go.sum
+new file mode 100644
+index 00000000..9e905ec7
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/go.sum
+@@ -0,0 +1,17 @@
++github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
++github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
++github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
++github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
++github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
++github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
++github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
++github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
++github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
++github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
++gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
++gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
++gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
++gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
++gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+diff --git a/vendor/github.com/GehirnInc/crypt/internal/utils.go b/vendor/github.com/GehirnInc/crypt/internal/utils.go
+new file mode 100644
+index 00000000..ea704fd6
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/internal/utils.go
+@@ -0,0 +1,41 @@
++// Copyright (c) 2015 Kohei YOSHIDA. All rights reserved.
++// This software is licensed under the 3-Clause BSD License
++// that can be found in LICENSE file.
++package internal
++
++const (
++	cleanBytesLen = 64
++)
++
++var (
++	cleanBytes = make([]byte, cleanBytesLen)
++)
++
++func CleanSensitiveData(b []byte) {
++	l := len(b)
++
++	for ; l > cleanBytesLen; l -= cleanBytesLen {
++		copy(b[l-cleanBytesLen:l], cleanBytes)
++	}
++
++	if l > 0 {
++		copy(b[0:l], cleanBytes[0:l])
++	}
++}
++
++func RepeatByteSequence(input []byte, length int) []byte {
++	var (
++		sequence = make([]byte, length)
++		unit     = len(input)
++	)
++
++	j := length / unit * unit
++	for i := 0; i < j; i += unit {
++		copy(sequence[i:length], input)
++	}
++	if j < length {
++		copy(sequence[j:length], input[0:length-j])
++	}
++
++	return sequence
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt.go b/vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt.go
+new file mode 100644
+index 00000000..ca7c0a4c
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt.go
+@@ -0,0 +1,143 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// Package md5_crypt implements the standard Unix MD5-crypt algorithm created by
++// Poul-Henning Kamp for FreeBSD.
++package md5_crypt
++
++import (
++	"bytes"
++	"crypto/md5"
++	"crypto/subtle"
++
++	"github.com/GehirnInc/crypt"
++	"github.com/GehirnInc/crypt/common"
++	"github.com/GehirnInc/crypt/internal"
++)
++
++func init() {
++	crypt.RegisterCrypt(crypt.MD5, New, MagicPrefix)
++}
++
++// NOTE: Cisco IOS only allows salts of length 4.
++
++const (
++	MagicPrefix   = "$1$"
++	SaltLenMin    = 1 // Real minimum is 0, but that isn't useful.
++	SaltLenMax    = 8
++	RoundsDefault = 1000
++)
++
++type crypter struct{ Salt common.Salt }
++
++// New returns a new crypt.Crypter computing the MD5-crypt password hashing.
++func New() crypt.Crypter {
++	return &crypter{
++		common.Salt{
++			MagicPrefix:   []byte(MagicPrefix),
++			SaltLenMin:    SaltLenMin,
++			SaltLenMax:    SaltLenMax,
++			RoundsDefault: RoundsDefault,
++		},
++	}
++}
++
++func (c *crypter) Generate(key, salt []byte) (result string, err error) {
++	if len(salt) == 0 {
++		salt = c.Salt.Generate(SaltLenMax)
++	}
++	salt, _, _, _, err = c.Salt.Decode(salt)
++	if err != nil {
++		return
++	}
++
++	keyLen := len(key)
++	h := md5.New()
++
++	// Compute sumB
++	h.Write(key)
++	h.Write(salt)
++	h.Write(key)
++	sumB := h.Sum(nil)
++
++	// Compute sumA
++	h.Reset()
++	h.Write(key)
++	h.Write(c.Salt.MagicPrefix)
++	h.Write(salt)
++	h.Write(internal.RepeatByteSequence(sumB, keyLen))
++	// The original implementation now does something weird:
++	//   For every 1 bit in the key, the first 0 is added to the buffer
++	//   For every 0 bit, the first character of the key
++	// This does not seem to be what was intended but we have to follow this to
++	// be compatible.
++	for i := keyLen; i > 0; i >>= 1 {
++		if i%2 == 0 {
++			h.Write(key[0:1])
++		} else {
++			h.Write([]byte{0})
++		}
++	}
++	sumA := h.Sum(nil)
++	internal.CleanSensitiveData(sumB)
++
++	// In fear of password crackers here comes a quite long loop which just
++	// processes the output of the previous round again.
++	// We cannot ignore this here.
++	for i := 0; i < RoundsDefault; i++ {
++		h.Reset()
++
++		// Add key or last result.
++		if i%2 != 0 {
++			h.Write(key)
++		} else {
++			h.Write(sumA)
++		}
++		// Add salt for numbers not divisible by 3.
++		if i%3 != 0 {
++			h.Write(salt)
++		}
++		// Add key for numbers not divisible by 7.
++		if i%7 != 0 {
++			h.Write(key)
++		}
++		// Add key or last result.
++		if i&1 != 0 {
++			h.Write(sumA)
++		} else {
++			h.Write(key)
++		}
++		copy(sumA, h.Sum(nil))
++	}
++
++	buf := bytes.Buffer{}
++	buf.Grow(len(c.Salt.MagicPrefix) + len(salt) + 1 + 22)
++	buf.Write(c.Salt.MagicPrefix)
++	buf.Write(salt)
++	buf.WriteByte('$')
++	buf.Write(common.Base64_24Bit([]byte{
++		sumA[12], sumA[6], sumA[0],
++		sumA[13], sumA[7], sumA[1],
++		sumA[14], sumA[8], sumA[2],
++		sumA[15], sumA[9], sumA[3],
++		sumA[5], sumA[10], sumA[4],
++		sumA[11],
++	}))
++	return buf.String(), nil
++}
++
++func (c *crypter) Verify(hashedKey string, key []byte) error {
++	newHash, err := c.Generate(key, []byte(hashedKey))
++	if err != nil {
++		return err
++	}
++	if subtle.ConstantTimeCompare([]byte(newHash), []byte(hashedKey)) != 1 {
++		return crypt.ErrKeyMismatch
++	}
++	return nil
++}
++
++func (c *crypter) Cost(hashedKey string) (int, error) { return RoundsDefault, nil }
++
++func (c *crypter) SetSalt(salt common.Salt) { c.Salt = salt }
+diff --git a/vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt_test.go b/vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt_test.go
+new file mode 100644
+index 00000000..abdb3b29
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/md5_crypt/md5_crypt_test.go
+@@ -0,0 +1,85 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package md5_crypt
++
++import "testing"
++
++var md5Crypt = New()
++
++func TestGenerate(t *testing.T) {
++	data := []struct {
++		salt []byte
++		key  []byte
++		out  string
++	}{
++		{
++			[]byte("$1$$"),
++			[]byte("abcdefghijk"),
++			"$1$$pL/BYSxMXs.jVuSV1lynn1",
++		},
++		{
++			[]byte("$1$an overlong salt$"),
++			[]byte("abcdfgh"),
++			"$1$an overl$ZYftmJDIw8sG5s4gG6r.70",
++		},
++		{
++			[]byte("$1$12345678$"),
++			[]byte("Lorem ipsum dolor sit amet"),
++			"$1$12345678$Suzx8CrBlkNJwVHHHv5tZ.",
++		},
++		{
++			[]byte("$1$deadbeef$"),
++			[]byte("password"),
++			"$1$deadbeef$Q7g0UO4hRC0mgQUQ/qkjZ0",
++		},
++		{
++			[]byte("$1$$"),
++			[]byte("missing salt"),
++			"$1$$Lv61fbMiEGprscPkdE9Iw/",
++		},
++		{
++			[]byte("$1$holy-moly-batman$"),
++			[]byte("1234567"),
++			"$1$holy-mol$WKomB0dWknSxdW/e8WYHG0",
++		},
++		{
++			[]byte("$1$asdfjkl;$"),
++			[]byte("A really long password. Longer " +
++				"than a password has any right to be" +
++				". Hey bub, don't mess with this password."),
++			"$1$asdfjkl;$DUqPhKwbK4smV0aEMyDdx/",
++		},
++	}
++
++	for i, d := range data {
++		hash, err := md5Crypt.Generate(d.key, d.salt)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if hash != d.out {
++			t.Errorf("Test %d failed\nExpected: %s, got: %s", i, d.out, hash)
++		}
++	}
++}
++
++func TestVerify(t *testing.T) {
++	data := [][]byte{
++		[]byte("password"),
++		[]byte("12345"),
++		[]byte("That's amazing! I've got the same combination on my luggage!"),
++		[]byte("And change the combination on my luggage!"),
++		[]byte("         random  spa  c    ing."),
++		[]byte("94ajflkvjzpe8u3&*j1k513KLJ&*()"),
++	}
++	for i, d := range data {
++		hash, err := md5Crypt.Generate(d, nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if err = md5Crypt.Verify(hash, d); err != nil {
++			t.Errorf("Test %d failed: %s", i, d)
++		}
++	}
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt.go b/vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt.go
+new file mode 100644
+index 00000000..fe94714b
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt.go
+@@ -0,0 +1,173 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// Package sha256_crypt implements Ulrich Drepper's SHA256-crypt password
++// hashing algorithm.
++//
++// The specification for this algorithm can be found here:
++// http://www.akkadia.org/drepper/SHA-crypt.txt
++package sha256_crypt
++
++import (
++	"bytes"
++	"crypto/sha256"
++	"crypto/subtle"
++	"strconv"
++
++	"github.com/GehirnInc/crypt"
++	"github.com/GehirnInc/crypt/common"
++	"github.com/GehirnInc/crypt/internal"
++)
++
++func init() {
++	crypt.RegisterCrypt(crypt.SHA256, New, MagicPrefix)
++}
++
++const (
++	MagicPrefix   = "$5$"
++	SaltLenMin    = 1
++	SaltLenMax    = 16
++	RoundsMin     = 1000
++	RoundsMax     = 999999999
++	RoundsDefault = 5000
++)
++
++var _rounds = []byte("rounds=")
++
++type crypter struct{ Salt common.Salt }
++
++// New returns a new crypt.Crypter computing the SHA256-crypt password hashing.
++func New() crypt.Crypter {
++	return &crypter{
++		common.Salt{
++			MagicPrefix:   []byte(MagicPrefix),
++			SaltLenMin:    SaltLenMin,
++			SaltLenMax:    SaltLenMax,
++			RoundsDefault: RoundsDefault,
++			RoundsMin:     RoundsMin,
++			RoundsMax:     RoundsMax,
++		},
++	}
++}
++
++func (c *crypter) Generate(key, salt []byte) (string, error) {
++	if len(salt) == 0 {
++		salt = c.Salt.GenerateWRounds(SaltLenMax, RoundsDefault)
++	}
++	salt, rounds, isRoundsDef, _, err := c.Salt.Decode(salt)
++	if err != nil {
++		return "", err
++	}
++
++	keyLen := len(key)
++	saltLen := len(salt)
++	h := sha256.New()
++
++	// Compute sumB, step 4-8
++	h.Write(key)
++	h.Write(salt)
++	h.Write(key)
++	sumB := h.Sum(nil)
++
++	// Compute sumA, step 1-3, 9-12
++	h.Reset()
++	h.Write(key)
++	h.Write(salt)
++	h.Write(internal.RepeatByteSequence(sumB, keyLen))
++	for i := keyLen; i > 0; i >>= 1 {
++		if i%2 == 0 {
++			h.Write(key)
++		} else {
++			h.Write(sumB)
++		}
++	}
++	sumA := h.Sum(nil)
++	internal.CleanSensitiveData(sumB)
++
++	// Compute seqP, step 13-16
++	h.Reset()
++	for i := 0; i < keyLen; i++ {
++		h.Write(key)
++	}
++	seqP := internal.RepeatByteSequence(h.Sum(nil), keyLen)
++
++	// Compute seqS, step 17-20
++	h.Reset()
++	for i := 0; i < 16+int(sumA[0]); i++ {
++		h.Write(salt)
++	}
++	seqS := internal.RepeatByteSequence(h.Sum(nil), saltLen)
++
++	// step 21
++	for i := 0; i < rounds; i++ {
++		h.Reset()
++
++		if i&1 != 0 {
++			h.Write(seqP)
++		} else {
++			h.Write(sumA)
++		}
++		if i%3 != 0 {
++			h.Write(seqS)
++		}
++		if i%7 != 0 {
++			h.Write(seqP)
++		}
++		if i&1 != 0 {
++			h.Write(sumA)
++		} else {
++			h.Write(seqP)
++		}
++		copy(sumA, h.Sum(nil))
++	}
++	internal.CleanSensitiveData(seqP)
++	internal.CleanSensitiveData(seqS)
++
++	// make output
++	buf := bytes.Buffer{}
++	buf.Grow(len(c.Salt.MagicPrefix) + len(_rounds) + 9 + 1 + len(salt) + 1 + 43)
++	buf.Write(c.Salt.MagicPrefix)
++	if isRoundsDef {
++		buf.Write(_rounds)
++		buf.WriteString(strconv.Itoa(rounds))
++		buf.WriteByte('$')
++	}
++	buf.Write(salt)
++	buf.WriteByte('$')
++	buf.Write(common.Base64_24Bit([]byte{
++		sumA[20], sumA[10], sumA[0],
++		sumA[11], sumA[1], sumA[21],
++		sumA[2], sumA[22], sumA[12],
++		sumA[23], sumA[13], sumA[3],
++		sumA[14], sumA[4], sumA[24],
++		sumA[5], sumA[25], sumA[15],
++		sumA[26], sumA[16], sumA[6],
++		sumA[17], sumA[7], sumA[27],
++		sumA[8], sumA[28], sumA[18],
++		sumA[29], sumA[19], sumA[9],
++		sumA[30], sumA[31],
++	}))
++	return buf.String(), nil
++}
++
++func (c *crypter) Verify(hashedKey string, key []byte) error {
++	newHash, err := c.Generate(key, []byte(hashedKey))
++	if err != nil {
++		return err
++	}
++	if subtle.ConstantTimeCompare([]byte(newHash), []byte(hashedKey)) != 1 {
++		return crypt.ErrKeyMismatch
++	}
++	return nil
++}
++
++func (c *crypter) Cost(hashedKey string) (int, error) {
++	_, rounds, _, _, err := c.Salt.Decode([]byte(hashedKey))
++	if err != nil {
++		return 0, err
++	}
++	return rounds, nil
++}
++
++func (c *crypter) SetSalt(salt common.Salt) { c.Salt = salt }
+diff --git a/vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt_test.go b/vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt_test.go
+new file mode 100644
+index 00000000..e8b1aff3
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/sha256_crypt/sha256_crypt_test.go
+@@ -0,0 +1,106 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package sha256_crypt
++
++import "testing"
++
++var sha256Crypt = New()
++
++func TestGenerate(t *testing.T) {
++	data := []struct {
++		salt []byte
++		key  []byte
++		out  string
++		cost int
++	}{
++		{
++			[]byte("$5$saltstring"),
++			[]byte("Hello world!"),
++			"$5$saltstring$5B8vYYiY.CVt1RlTTf8KbXBH3hsxY/GNooZaBBGWEc5",
++			RoundsDefault,
++		},
++		{
++			[]byte("$5$rounds=10000$saltstringsaltstring"),
++			[]byte("Hello world!"),
++			"$5$rounds=10000$saltstringsaltst$3xv.VbSHBb41AL9AvLeujZkZRBAwqFM" +
++				"z2.opqey6IcA",
++			10000,
++		},
++		{
++			[]byte("$5$rounds=5000$toolongsaltstring"),
++			[]byte("This is just a test"),
++			"$5$rounds=5000$toolongsaltstrin$Un/5jzAHMgOGZ5.mWJpuVolil07guHPv" +
++				"OW8mGRcvxa5",
++			5000,
++		},
++		{
++			[]byte("$5$rounds=1400$anotherlongsaltstring"),
++			[]byte("a very much longer text to encrypt.  " +
++				"This one even stretches over more" +
++				"than one line."),
++			"$5$rounds=1400$anotherlongsalts$Rx.j8H.h8HjEDGomFU8bDkXm3XIUnzyx" +
++				"f12oP84Bnq1",
++			1400,
++		},
++		{
++			[]byte("$5$rounds=77777$short"),
++			[]byte("we have a short salt string but not a short password"),
++			"$5$rounds=77777$short$JiO1O3ZpDAxGJeaDIuqCoEFysAe1mZNJRs3pw0KQRd/",
++			77777,
++		},
++		{
++			[]byte("$5$rounds=123456$asaltof16chars.."),
++			[]byte("a short string"),
++			"$5$rounds=123456$asaltof16chars..$gP3VQ/6X7UUEW3HkBn2w1/Ptq2jxPy" +
++				"zV/cZKmF/wJvD",
++			123456,
++		},
++		{
++			[]byte("$5$rounds=10$roundstoolow"),
++			[]byte("the minimum number is still observed"),
++			"$5$rounds=1000$roundstoolow$yfvwcWrQ8l/K0DAWyuPMDNHpIVlTQebY9l/g" +
++				"L972bIC",
++			1000,
++		},
++	}
++
++	for i, d := range data {
++		hash, err := sha256Crypt.Generate(d.key, d.salt)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if hash != d.out {
++			t.Errorf("Test %d failed\nExpected: %s, got: %s", i, d.out, hash)
++		}
++
++		cost, err := sha256Crypt.Cost(hash)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if cost != d.cost {
++			t.Errorf("Test %d failed\nExpected: %d, got: %d", i, d.cost, cost)
++		}
++	}
++}
++
++func TestVerify(t *testing.T) {
++	data := [][]byte{
++		[]byte("password"),
++		[]byte("12345"),
++		[]byte("That's amazing! I've got the same combination on my luggage!"),
++		[]byte("And change the combination on my luggage!"),
++		[]byte("         random  spa  c    ing."),
++		[]byte("94ajflkvjzpe8u3&*j1k513KLJ&*()"),
++	}
++	for i, d := range data {
++		hash, err := sha256Crypt.Generate(d, nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if err = sha256Crypt.Verify(hash, d); err != nil {
++			t.Errorf("Test %d failed: %s", i, d)
++		}
++	}
++}
+diff --git a/vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt.go b/vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt.go
+new file mode 100644
+index 00000000..39064d54
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt.go
+@@ -0,0 +1,188 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++// Package sha512_crypt implements Ulrich Drepper's SHA512-crypt password
++// hashing algorithm.
++//
++// The specification for this algorithm can be found here:
++// http://www.akkadia.org/drepper/SHA-crypt.txt
++package sha512_crypt
++
++import (
++	"bytes"
++	"crypto/sha512"
++	"crypto/subtle"
++	"strconv"
++
++	"github.com/GehirnInc/crypt"
++	"github.com/GehirnInc/crypt/common"
++	"github.com/GehirnInc/crypt/internal"
++)
++
++func init() {
++	crypt.RegisterCrypt(crypt.SHA512, New, MagicPrefix)
++}
++
++const (
++	MagicPrefix   = "$6$"
++	SaltLenMin    = 1
++	SaltLenMax    = 16
++	RoundsMin     = 1000
++	RoundsMax     = 999999999
++	RoundsDefault = 5000
++)
++
++var _rounds = []byte("rounds=")
++
++type crypter struct{ Salt common.Salt }
++
++// New returns a new crypt.Crypter computing the SHA512-crypt password hashing.
++func New() crypt.Crypter {
++	return &crypter{
++		common.Salt{
++			MagicPrefix:   []byte(MagicPrefix),
++			SaltLenMin:    SaltLenMin,
++			SaltLenMax:    SaltLenMax,
++			RoundsDefault: RoundsDefault,
++			RoundsMin:     RoundsMin,
++			RoundsMax:     RoundsMax,
++		},
++	}
++}
++
++func (c *crypter) Generate(key, salt []byte) (string, error) {
++	if len(salt) == 0 {
++		salt = c.Salt.GenerateWRounds(SaltLenMax, RoundsDefault)
++	}
++	salt, rounds, isRoundsDef, _, err := c.Salt.Decode(salt)
++	if err != nil {
++		return "", err
++	}
++
++	keyLen := len(key)
++	saltLen := len(salt)
++	h := sha512.New()
++
++	// compute sumB
++	// step 4-8
++	h.Write(key)
++	h.Write(salt)
++	h.Write(key)
++	sumB := h.Sum(nil)
++
++	// Compute sumA
++	// step 1-3, 9-12
++	h.Reset()
++	h.Write(key)
++	h.Write(salt)
++	h.Write(internal.RepeatByteSequence(sumB, keyLen))
++	for i := keyLen; i > 0; i >>= 1 {
++		if i%2 == 0 {
++			h.Write(key)
++		} else {
++			h.Write(sumB)
++		}
++	}
++	sumA := h.Sum(nil)
++	internal.CleanSensitiveData(sumB)
++
++	// Compute seqP
++	// step 13-16
++	h.Reset()
++	for i := 0; i < keyLen; i++ {
++		h.Write(key)
++	}
++	seqP := internal.RepeatByteSequence(h.Sum(nil), keyLen)
++
++	// Compute seqS
++	// step 17-20
++	h.Reset()
++	for i := 0; i < 16+int(sumA[0]); i++ {
++		h.Write(salt)
++	}
++	seqS := internal.RepeatByteSequence(h.Sum(nil), saltLen)
++
++	// step 21
++	for i := 0; i < rounds; i++ {
++		h.Reset()
++
++		if i&1 != 0 {
++			h.Write(seqP)
++		} else {
++			h.Write(sumA)
++		}
++		if i%3 != 0 {
++			h.Write(seqS)
++		}
++		if i%7 != 0 {
++			h.Write(seqP)
++		}
++		if i&1 != 0 {
++			h.Write(sumA)
++		} else {
++			h.Write(seqP)
++		}
++		copy(sumA, h.Sum(nil))
++	}
++	internal.CleanSensitiveData(seqP)
++	internal.CleanSensitiveData(seqS)
++
++	// make output
++	buf := bytes.Buffer{}
++	buf.Grow(len(c.Salt.MagicPrefix) + len(_rounds) + 9 + 1 + len(salt) + 1 + 86)
++	buf.Write(c.Salt.MagicPrefix)
++	if isRoundsDef {
++		buf.Write(_rounds)
++		buf.WriteString(strconv.Itoa(rounds))
++		buf.WriteByte('$')
++	}
++	buf.Write(salt)
++	buf.WriteByte('$')
++	buf.Write(common.Base64_24Bit([]byte{
++		sumA[42], sumA[21], sumA[0],
++		sumA[1], sumA[43], sumA[22],
++		sumA[23], sumA[2], sumA[44],
++		sumA[45], sumA[24], sumA[3],
++		sumA[4], sumA[46], sumA[25],
++		sumA[26], sumA[5], sumA[47],
++		sumA[48], sumA[27], sumA[6],
++		sumA[7], sumA[49], sumA[28],
++		sumA[29], sumA[8], sumA[50],
++		sumA[51], sumA[30], sumA[9],
++		sumA[10], sumA[52], sumA[31],
++		sumA[32], sumA[11], sumA[53],
++		sumA[54], sumA[33], sumA[12],
++		sumA[13], sumA[55], sumA[34],
++		sumA[35], sumA[14], sumA[56],
++		sumA[57], sumA[36], sumA[15],
++		sumA[16], sumA[58], sumA[37],
++		sumA[38], sumA[17], sumA[59],
++		sumA[60], sumA[39], sumA[18],
++		sumA[19], sumA[61], sumA[40],
++		sumA[41], sumA[20], sumA[62],
++		sumA[63],
++	}))
++	return buf.String(), nil
++}
++
++func (c *crypter) Verify(hashedKey string, key []byte) error {
++	newHash, err := c.Generate(key, []byte(hashedKey))
++	if err != nil {
++		return err
++	}
++	if subtle.ConstantTimeCompare([]byte(newHash), []byte(hashedKey)) != 1 {
++		return crypt.ErrKeyMismatch
++	}
++	return nil
++}
++
++func (c *crypter) Cost(hashedKey string) (int, error) {
++	_, rounds, _, _, err := c.Salt.Decode([]byte(hashedKey))
++	if err != nil {
++		return 0, err
++	}
++	return rounds, nil
++}
++
++func (c *crypter) SetSalt(salt common.Salt) { c.Salt = salt }
+diff --git a/vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt_test.go b/vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt_test.go
+new file mode 100644
+index 00000000..bcf5fc1d
+--- /dev/null
++++ b/vendor/github.com/GehirnInc/crypt/sha512_crypt/sha512_crypt_test.go
+@@ -0,0 +1,108 @@
++// (C) Copyright 2012, Jeramey Crawford <jeramey@antihe.ro>. All
++// rights reserved. Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package sha512_crypt
++
++import "testing"
++
++var sha512Crypt = New()
++
++func TestGenerate(t *testing.T) {
++	data := []struct {
++		salt []byte
++		key  []byte
++		out  string
++		cost int
++	}{
++		{
++			[]byte("$6$saltstring"),
++			[]byte("Hello world!"),
++			"$6$saltstring$svn8UoSVapNtMuq1ukKS4tPQd8iKwSMHWjl/O817G3uBnIFNjn" +
++				"QJuesI68u4OTLiBFdcbYEdFCoEOfaS35inz1",
++			RoundsDefault,
++		},
++		{
++			[]byte("$6$rounds=10000$saltstringsaltstring"),
++			[]byte("Hello world!"),
++			"$6$rounds=10000$saltstringsaltst$OW1/O6BYHV6BcXZu8QVeXbDWra3Oeqh" +
++				"0sbHbbMCVNSnCM/UrjmM0Dp8vOuZeHBy/YTBmSK6H9qs/y3RnOaw5v.",
++			10000,
++		},
++		{
++			[]byte("$6$rounds=5000$toolongsaltstring"),
++			[]byte("This is just a test"),
++			"$6$rounds=5000$toolongsaltstrin$lQ8jolhgVRVhY4b5pZKaysCLi0QBxGoN" +
++				"eKQzQ3glMhwllF7oGDZxUhx1yxdYcz/e1JSbq3y6JMxxl8audkUEm0",
++			5000,
++		},
++		{
++			[]byte("$6$rounds=1400$anotherlongsaltstring"),
++			[]byte("a very much longer text to encrypt.  " +
++				"This one even stretches over more" +
++				"than one line."),
++			"$6$rounds=1400$anotherlongsalts$POfYwTEok97VWcjxIiSOjiykti.o/pQs" +
++				".wPvMxQ6Fm7I6IoYN3CmLs66x9t0oSwbtEW7o7UmJEiDwGqd8p4ur1",
++			1400,
++		},
++		{
++			[]byte("$6$rounds=77777$short"),
++			[]byte("we have a short salt string but not a short password"),
++			"$6$rounds=77777$short$WuQyW2YR.hBNpjjRhpYD/ifIw05xdfeEyQoMxIXbkv" +
++				"r0gge1a1x3yRULJ5CCaUeOxFmtlcGZelFl5CxtgfiAc0",
++			77777,
++		},
++		{
++			[]byte("$6$rounds=123456$asaltof16chars.."),
++			[]byte("a short string"),
++			"$6$rounds=123456$asaltof16chars..$BtCwjqMJGx5hrJhZywWvt0RLE8uZ4o" +
++				"PwcelCjmw2kSYu.Ec6ycULevoBK25fs2xXgMNrCzIMVcgEJAstJeonj1",
++			123456,
++		},
++		{
++			[]byte("$6$rounds=10$roundstoolow"),
++			[]byte("the minimum number is still observed"),
++			"$6$rounds=1000$roundstoolow$kUMsbe306n21p9R.FRkW3IGn.S9NPN0x50Yh" +
++				"H1xhLsPuWGsUSklZt58jaTfF4ZEQpyUNGc0dqbpBYYBaHHrsX.",
++			1000,
++		},
++	}
++
++	for i, d := range data {
++		hash, err := sha512Crypt.Generate(d.key, d.salt)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if hash != d.out {
++			t.Errorf("Test %d failed\nExpected: %s, got: %s", i, d.out, hash)
++		}
++
++		cost, err := sha512Crypt.Cost(hash)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if cost != d.cost {
++			t.Errorf("Test %d failed\nExpected: %d, got: %d", i, d.cost, cost)
++		}
++	}
++}
++
++func TestVerify(t *testing.T) {
++	data := [][]byte{
++		[]byte("password"),
++		[]byte("12345"),
++		[]byte("That's amazing! I've got the same combination on my luggage!"),
++		[]byte("And change the combination on my luggage!"),
++		[]byte("         random  spa  c    ing."),
++		[]byte("94ajflkvjzpe8u3&*j1k513KLJ&*()"),
++	}
++	for i, d := range data {
++		hash, err := sha512Crypt.Generate(d, nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if err = sha512Crypt.Verify(hash, d); err != nil {
++			t.Errorf("Test %d failed: %s", i, d)
++		}
++	}
++}
+diff --git a/vendor/modules.txt b/vendor/modules.txt
+index 984b721c..7ec3e02d 100644
+--- a/vendor/modules.txt
++++ b/vendor/modules.txt
+@@ -119,8 +119,14 @@ github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/options
+ github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/shared
+ github.com/AzureAD/microsoft-authentication-library-for-go/apps/internal/version
+ github.com/AzureAD/microsoft-authentication-library-for-go/apps/public
+-# github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0
+-## explicit; go 1.21
++# github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
++## explicit; go 1.19
++github.com/GehirnInc/crypt
++github.com/GehirnInc/crypt/common
++github.com/GehirnInc/crypt/internal
++github.com/GehirnInc/crypt/sha512_crypt
++# github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.29.0
++## explicit; go 1.23.0
+ github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp
+ # github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.48.1
+ ## explicit; go 1.21
+-- 
+2.43.0
+
