@@ -4,12 +4,17 @@ go 1.22.0
 toolchain go1.23.6
 
 require (
-	cloud.google.com/go/compute/metadata v0.6.0
-	cloud.google.com/go/storage v1.50.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0
-	github.com/aws/aws-sdk-go v1.55.6
-	github.com/beevik/etree v1.5.0
+	cloud.google.com/go/compute/metadata v0.9.0
+	cloud.google.com/go/storage v1.57.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.3
+	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
+	github.com/aws/aws-sdk-go-v2 v1.39.3
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.17
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.13
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.5
+	github.com/beevik/etree v1.6.0
 	github.com/containers/libhvee v0.10.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/coreos/go-systemd/v22 v22.5.0
