@@ -18,25 +18,29 @@ package azure
 
 import (
 	"encoding/base64"
-
-
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-
-
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/coreos/vcontext/report"
 	"github.com/flatcar/ignition/v2/config/shared/errors"
+	cfgutil "github.com/flatcar/ignition/v2/config/util"
 	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
 	execUtil "github.com/flatcar/ignition/v2/internal/exec/util"
 	"github.com/flatcar/ignition/v2/internal/log"
 	"github.com/flatcar/ignition/v2/internal/platform"
 	"github.com/flatcar/ignition/v2/internal/providers/util"
 	"github.com/flatcar/ignition/v2/internal/resource"
+	"github.com/vincent-petithory/dataurl"
+	"golang.org/x/sys/unix"
 )
 
 const (
