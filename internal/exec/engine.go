@@ -275,6 +275,7 @@ func (e *Engine) acquireProviderConfig() (cfg types.Config, err error) {
 		e.Logger.Crit("failed to write cached config: %v", err)
 		return
 	}
+	e.Logger.Info("cached fetched config at %q", e.ConfigCache)
 
 	return
 }
@@ -337,6 +338,7 @@ func (e *Engine) fetchProviderConfig() (types.Config, error) {
 }
 
 func (e *Engine) fetchGeneratedConfig() (types.Config, error) {
+	e.Logger.Info("using generated cloud config for platform %q", e.PlatformConfig.Name())
 	cfg, err := e.PlatformConfig.GenerateConfig(e.Fetcher)
 	if err != nil {
 		return types.Config{}, err

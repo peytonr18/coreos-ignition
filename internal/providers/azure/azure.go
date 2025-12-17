@@ -129,12 +129,16 @@ func fetchFromAzureMetadata(f *resource.Fetcher) (types.Config, report.Report, e
 	logger := f.Logger
 
 	// we first try to fetch config from IMDS, in case of failure we fallback on the custom data.
+	logger.Info("azure: attempting to read userdata from IMDS")
 	userData, err := fetchFromIMDS(f)
 	if err == nil {
 		logger.Info("config has been read from IMDS userdata")
 		return util.ParseConfig(logger, userData)
 	}
 
+	if err != nil && err != errors.ErrEmpty {
+		logger.Warning("azure: IMDS userdata request failed: %v", err)
+	}
 	if err != errors.ErrEmpty {
 		return types.Config{}, report.Report{}, err
 	}
@@ -145,6 +149,7 @@ func fetchFromAzureMetadata(f *resource.Fetcher) (types.Config, report.Report, e
 
 // fetchFromIMDS requests the Azure IMDS to fetch userdata and decode it.
 func fetchFromIMDS(f *resource.Fetcher) ([]byte, error) {
+	logger := f.Logger
 	headers := make(http.Header)
 	headers.Set("Metadata", "true")
 
@@ -152,6 +157,7 @@ func fetchFromIMDS(f *resource.Fetcher) ([]byte, error) {
 	// Here, we match the cloud-init set.
 	// https://github.com/canonical/cloud-init/commit/c1a2047cf291
 	// https://github.com/coreos/ignition/issues/1806
+	logger.Debug("azure: requesting IMDS userdata from %s", imdsUserdataURL.String())
 	data, err := f.FetchToBuffer(imdsUserdataURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
 	if err != nil {
 		return nil, fmt.Errorf("fetching to buffer: %w", err)
@@ -173,6 +179,7 @@ func fetchFromIMDS(f *resource.Fetcher) ([]byte, error) {
 		return nil, fmt.Errorf("decoding userdata: %w", err)
 	}
 
+	logger.Info("azure: received %d bytes of userdata from IMDS", l)
 	return userData[:l], nil
 }
 
@@ -352,10 +359,13 @@ func (l linuxProvisioningConfigurationSet) passwordAuthDisabled() bool {
 }
 
 func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
+	logger := f.Logger
+	logger.Info("azure: generating cloud config via IMDS + OVF metadata")
 	meta, err := fetchInstanceMetadata(f)
 	if err != nil {
 		return types.Config{}, fmt.Errorf("fetching instance metadata: %w", err)
 	}
+	logger.Info("azure: fetched instance metadata from IMDS")
 
 	ovfRaw, err := readOvfEnvironment(f, []string{CDS_FSTYPE_UDF})
 	if err != nil {
@@ -364,13 +374,18 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	if len(ovfRaw) == 0 {
 		return types.Config{}, fmt.Errorf("ovf-env.xml was empty")
 	}
+	logger.Info("azure: read provisioning metadata from OVF (bytes=%d)", len(ovfRaw))
 
 	provisioning, err := parseProvisioningConfig(ovfRaw)
 	if err != nil {
 		return types.Config{}, fmt.Errorf("parsing provisioning metadata: %w", err)
 	}
 
-	return buildGeneratedConfig(meta, provisioning)
+	cfg, err := buildGeneratedConfig(meta, provisioning)
+	if err == nil {
+		logger.Info("azure: generated cloud config successfully")
+	}
+	return cfg, err
 }
 
 func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {

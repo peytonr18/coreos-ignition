@@ -59,4 +59,11 @@ else
     fi
 fi
 
-echo "PLATFORM_ID=$(cmdline_arg ignition.platform.id)" > /run/ignition.env
+platform_id="$(cmdline_arg ignition.platform.id)"
+echo "PLATFORM_ID=${platform_id}" > /run/ignition.env
+
+# Always synthesize configs on Azure without extra drop-ins.
+if [[ "${platform_id}" == "azure" ]]; then
+    echo "IGNITION_ARGS=--generate-cloud-config" >> /run/ignition.env
+    echo "ignition-generator: enabling --generate-cloud-config for Azure" >&2
+fi
