@@ -367,26 +367,36 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	logger := f.Logger
 	logger.Info("azure: [1/4] generating cloud config via IMDS + OVF metadata")
 	logger.Info("azure: [2/4] requesting instance metadata from IMDS")
-	meta, err := fetchInstanceMetadataFunc(f)
+	meta, imdsErr := fetchInstanceMetadataFunc(f)
 	if err != nil {
-		return types.Config{}, fmt.Errorf("fetching instance metadata: %w", err)
+		logger.Warning("azure: failed to fetch instance metadata from IMDS: %v", err)
+		meta = nil
+	} else {
+		logger.Info("azure: fetched instance metadata from IMDS: %+v", meta)
 	}
-	logger.Info("azure: fetched instance metadata from IMDS")
 
 	logger.Info("azure: [3/4] reading OVF provisioning metadata from attached media")
-	ovfRaw, err := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
-	if err != nil {
-		return types.Config{}, fmt.Errorf("reading provisioning metadata: %w", err)
+	ovfRaw, ovfErr := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
+	if ovfErr != nil {
+		logger.Warning("azure: failed to read OVF provisioning metadata: %v", ovfErr)
+		ovfRaw = nil
+	} else if len(ovfRaw) == 0 {
+		logger.Warning("azure: ovf-env.xml was empty")
+		ovfRaw = nil
+	} else {
+		logger.Info("azure: read provisioning metadata from OVF (bytes=%d)", len(ovfRaw))
 	}
-	if len(ovfRaw) == 0 {
-		return types.Config{}, fmt.Errorf("ovf-env.xml was empty")
-	}
-	logger.Info("azure: read provisioning metadata from OVF (bytes=%d)", len(ovfRaw))
 
 	logger.Info("azure: [4/4] parsing provisioning metadata and synthesizing Ignition config")
-	provisioning, err := parseProvisioningConfig(ovfRaw)
-	if err != nil {
-		return types.Config{}, fmt.Errorf("parsing provisioning metadata: %w", err)
+	var provisioning *linuxProvisioningConfigurationSet
+	if ovfRaw != nil {
+		provisioning, err = parseProvisioningConfig(ovfRaw)
+		if err != nil {
+			logger.Warning("azure: failed to parse provisioning metadata: %v", err)
+			provisioning = nil
+		} else {
+			logger.Info("azure: successfully parsed provisioning metadata from ovfRaw")
+		}
 	}
 
 	cfg, err := buildGeneratedConfig(meta, provisioning)
