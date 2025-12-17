@@ -367,7 +367,7 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	logger := f.Logger
 	logger.Info("azure: [1/4] generating cloud config via IMDS + OVF metadata")
 	logger.Info("azure: [2/4] requesting instance metadata from IMDS")
-	meta, imdsErr := fetchInstanceMetadataFunc(f)
+	meta, err := fetchInstanceMetadataFunc(f)
 	if err != nil {
 		logger.Warning("azure: failed to fetch instance metadata from IMDS: %v", err)
 		meta = nil
@@ -376,9 +376,9 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	}
 
 	logger.Info("azure: [3/4] reading OVF provisioning metadata from attached media")
-	ovfRaw, ovfErr := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
-	if ovfErr != nil {
-		logger.Warning("azure: failed to read OVF provisioning metadata: %v", ovfErr)
+	ovfRaw, err := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
+	if err != nil {
+		logger.Warning("azure: failed to read OVF provisioning metadata: %v", err)
 		ovfRaw = nil
 	} else if len(ovfRaw) == 0 {
 		logger.Warning("azure: ovf-env.xml was empty")
@@ -402,6 +402,8 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	cfg, err := buildGeneratedConfig(meta, provisioning)
 	if err == nil {
 		logger.Info("azure: generated cloud config successfully")
+	} else {
+		logger.Warning("azure: failed to generate cloud config: %v", err)
 	}
 	return cfg, err
 }
