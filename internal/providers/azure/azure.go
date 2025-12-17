@@ -77,7 +77,7 @@ var (
 		Scheme:   "http",
 		Host:     "169.254.169.254",
 		Path:     "metadata/instance",
-		RawQuery: "api-version=2021-01-01&format=json&extended=true",
+		RawQuery: "api-version=2021-03-01&format=json&extended=true",
 	}
 )
 
