@@ -408,10 +408,36 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	return cfg, err
 }
 
+
 func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
+	logger := f.Logger
 	headers := make(http.Header)
 	headers.Set("Metadata", "true")
-	data, err := f.FetchToBuffer(imdsInstanceURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
+	
+	// Retry IMDS metadata fetch if networking isn't ready yet
+	const maxNetRetries = 10
+	const netRetryDelay = 2 * time.Second
+	
+	var data []byte
+	var err error
+	
+	for attempt := 0; attempt < maxNetRetries; attempt++ {
+		data, err = f.FetchToBuffer(imdsInstanceURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
+		if err == nil {
+			break
+		}
+		
+		if errors.Is(err, resource.ErrNeedNet) {
+			if attempt < maxNetRetries-1 {
+				logger.Info("azure: networking not ready for IMDS, retrying in %v (attempt %d/%d)", netRetryDelay, attempt+1, maxNetRetries)
+				time.Sleep(netRetryDelay)
+				continue
+			}
+			logger.Warning("azure: networking not available after %d attempts", maxNetRetries)
+		}
+		return nil, fmt.Errorf("fetching metadata: %w", err)
+	}
+	
 	if err != nil {
 		return nil, fmt.Errorf("fetching metadata: %w", err)
 	}
@@ -422,6 +448,7 @@ func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
 	}
 	return &meta, nil
 }
+
 
 const (
 	// maxOvfRetries is the maximum number of attempts to find the OVF environment
