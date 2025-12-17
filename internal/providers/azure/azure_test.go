@@ -1,9 +1,38 @@
 package azure
 
 import (
+	"fmt"
+	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/flatcar/ignition/v2/internal/log"
+	"github.com/flatcar/ignition/v2/internal/resource"
 )
+
+type stubFetcher struct {
+	resource.Fetcher
+	responses map[string][]byte
+}
+
+func newStubFetcher() *stubFetcher {
+	l := log.New(true)
+	return &stubFetcher{
+		Fetcher:   resource.Fetcher{Logger: &l},
+		responses: make(map[string][]byte),
+	}
+}
+
+func (f *stubFetcher) expect(url string, payload []byte) {
+	f.responses[url] = payload
+}
+
+func (f *stubFetcher) FetchToBuffer(u url.URL, opts resource.FetchOptions) ([]byte, error) {
+	if data, ok := f.responses[u.String()]; ok {
+		return data, nil
+	}
+	return nil, fmt.Errorf("unexpected URL %s", u.String())
+}
 
 func TestParseProvisioningConfig(t *testing.T) {
 	raw := []byte(`
@@ -300,5 +329,76 @@ func TestIsPasswordHashed(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("IsPasswordHashed(%q) = %v, expected %v", tt.password, result, tt.expected)
 		}
+	}
+}
+
+func TestGenerateCloudConfigSuccess(t *testing.T) {
+	t.Cleanup(func() {
+		fetchInstanceMetadataFunc = fetchInstanceMetadata
+		readOvfEnvironmentFunc = readOvfEnvironment
+	})
+
+	fetchInstanceMetadataFunc = func(f *resource.Fetcher) (*instanceMetadata, error) {
+		return &instanceMetadata{
+			Compute: instanceComputeMetadata{
+				OSProfile: instanceOSProfile{AdminUsername: "imds-user"},
+				PublicKeys: []instancePublicKey{
+					{KeyData: "ssh-rsa AAAA"},
+				},
+			},
+		}, nil
+	}
+	ovf := []byte(`<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
+  <LinuxProvisioningConfigurationSet>
+    <UserName>ovf-user</UserName>
+    <UserPassword>password</UserPassword>
+    <DisableSshPasswordAuthentication>true</DisableSshPasswordAuthentication>
+    <SSH>
+      <PublicKeys>
+        <PublicKey><Value>ssh-ed25519 BBBB</Value></PublicKey>
+      </PublicKeys>
+    </SSH>
+  </LinuxProvisioningConfigurationSet>
+</wa:ProvisioningSection>`)
+	readOvfEnvironmentFunc = func(f *resource.Fetcher, _ []string) ([]byte, error) {
+		return ovf, nil
+	}
+
+	fetcher := newStubFetcher()
+	cfg, err := generateCloudConfig(&fetcher.Fetcher)
+	if err != nil {
+		t.Fatalf("generateCloudConfig() err = %v", err)
+	}
+	if len(cfg.Passwd.Users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(cfg.Passwd.Users))
+	}
+	if cfg.Passwd.Users[0].Name != "imds-user" {
+		t.Fatalf("expected username imds-user, got %s", cfg.Passwd.Users[0].Name)
+	}
+	if len(cfg.Passwd.Users[0].SSHAuthorizedKeys) != 2 {
+		t.Fatalf("expected merged ssh keys, got %d", len(cfg.Passwd.Users[0].SSHAuthorizedKeys))
+	}
+	if len(cfg.Storage.Files) != 2 {
+		t.Fatalf("expected 2 generated files, got %d", len(cfg.Storage.Files))
+	}
+}
+
+func TestGenerateCloudConfigNeedNet(t *testing.T) {
+	t.Cleanup(func() {
+		fetchInstanceMetadataFunc = fetchInstanceMetadata
+		readOvfEnvironmentFunc = readOvfEnvironment
+	})
+	wantErr := resource.ErrNeedNet
+	fetchInstanceMetadataFunc = func(f *resource.Fetcher) (*instanceMetadata, error) {
+		return nil, wantErr
+	}
+	readOvfEnvironmentFunc = func(f *resource.Fetcher, _ []string) ([]byte, error) {
+		return nil, fmt.Errorf("should not be called")
+	}
+
+	fetcher := newStubFetcher()
+	_, err := generateCloudConfig(&fetcher.Fetcher)
+	if err == nil || err.Error() != fmt.Sprintf("fetching instance metadata: %v", wantErr) {
+		t.Fatalf("expected wrapped ErrNeedNet, got %v", err)
 	}
 }

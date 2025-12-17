@@ -16,6 +16,7 @@ package exec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -23,7 +24,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/journal"
-	"github.com/flatcar/ignition/v2/config/shared/errors"
+	configErrors "github.com/flatcar/ignition/v2/config/shared/errors"
 	latest "github.com/flatcar/ignition/v2/config/v3_6_experimental"
 	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
 	"github.com/flatcar/ignition/v2/internal/exec/stages"
@@ -71,7 +72,7 @@ type Engine struct {
 func (e Engine) Run(stageName string) error {
 	if e.Fetcher == nil || e.Logger == nil {
 		fmt.Fprintf(os.Stderr, "engine incorrectly configured\n")
-		return errors.ErrEngineConfiguration
+		return configErrors.ErrEngineConfiguration
 	}
 	baseConfig := emptyConfig
 
@@ -98,7 +99,7 @@ func (e Engine) Run(stageName string) error {
 	// to perform any additional fetcher configuration  e.x.
 	// configuring the S3RegionHint when running on AWS.
 	err = e.PlatformConfig.Init(e.Fetcher)
-	if err == resource.ErrNeedNet && stageName == "fetch-offline" {
+	if errors.Is(err, resource.ErrNeedNet) && stageName == "fetch-offline" {
 		err = e.signalNeedNet()
 		if err != nil {
 			e.Logger.Crit("failed to signal neednet: %v", err)
@@ -109,13 +110,13 @@ func (e Engine) Run(stageName string) error {
 	}
 
 	cfg, err := e.acquireConfig(stageName)
-	if err == resource.ErrNeedNet && stageName == "fetch-offline" {
+	if errors.Is(err, resource.ErrNeedNet) && stageName == "fetch-offline" {
 		err = e.signalNeedNet()
 		if err != nil {
 			e.Logger.Crit("failed to signal neednet: %v", err)
 		}
 		return err
-	} else if err == errors.ErrEmpty {
+	} else if err == configErrors.ErrEmpty {
 		e.Logger.Info("%v: ignoring user-provided config", err)
 	} else if err != nil {
 		e.Logger.Crit("failed to acquire config: %v", err)
@@ -127,7 +128,7 @@ func (e Engine) Run(stageName string) error {
 
 	fullConfig := latest.Merge(baseConfig, latest.Merge(systemBaseConfig, cfg))
 	err = stages.Get(stageName).Create(e.Logger, e.Root, *e.Fetcher, e.State).Run(fullConfig)
-	if err == resource.ErrNeedNet && stageName == "fetch-offline" {
+	if errors.Is(err, resource.ErrNeedNet) && stageName == "fetch-offline" {
 		err = e.signalNeedNet()
 		if err != nil {
 			e.Logger.Crit("failed to signal neednet: %v", err)
@@ -230,12 +231,12 @@ func (e *Engine) acquireProviderConfig() (cfg types.Config, err error) {
 
 	// (Re)Fetch the config if the cache is unreadable.
 	cfg, err = e.fetchProviderConfig()
-	if err == errors.ErrEmpty {
+	if err == configErrors.ErrEmpty {
 		// Continue if the provider config was empty as we want to write an empty
 		// cache config for use by other stages.
 		cfg = emptyConfig
 		e.Logger.Info("%v: provider config was empty, continuing with empty cache config", err)
-	} else if err == resource.ErrNeedNet {
+	} else if errors.Is(err, resource.ErrNeedNet) {
 		e.Logger.Info("failed to fetch config: %s", err)
 		return
 	} else if err != nil {
@@ -260,7 +261,7 @@ func (e *Engine) acquireProviderConfig() (cfg types.Config, err error) {
 	rpt := validate.Validate(cfg, "json")
 	e.Logger.LogReport(rpt)
 	if rpt.IsFatal() {
-		err = errors.ErrInvalid
+		err = configErrors.ErrInvalid
 		e.Logger.Crit("merging configs resulted in an invalid config")
 		return
 	}

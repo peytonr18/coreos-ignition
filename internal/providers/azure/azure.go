@@ -87,6 +87,11 @@ var imdsRetryCodes = []int{
 	429,
 }
 
+var (
+	fetchInstanceMetadataFunc = fetchInstanceMetadata
+	readOvfEnvironmentFunc    = readOvfEnvironment
+)
+
 func init() {
 	platform.Register(platform.Provider{
 		Name:                "azure",
@@ -360,14 +365,16 @@ func (l linuxProvisioningConfigurationSet) passwordAuthDisabled() bool {
 
 func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	logger := f.Logger
-	logger.Info("azure: generating cloud config via IMDS + OVF metadata")
-	meta, err := fetchInstanceMetadata(f)
+	logger.Info("azure: [1/4] generating cloud config via IMDS + OVF metadata")
+	logger.Info("azure: [2/4] requesting instance metadata from IMDS")
+	meta, err := fetchInstanceMetadataFunc(f)
 	if err != nil {
 		return types.Config{}, fmt.Errorf("fetching instance metadata: %w", err)
 	}
 	logger.Info("azure: fetched instance metadata from IMDS")
 
-	ovfRaw, err := readOvfEnvironment(f, []string{CDS_FSTYPE_UDF})
+	logger.Info("azure: [3/4] reading OVF provisioning metadata from attached media")
+	ovfRaw, err := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
 	if err != nil {
 		return types.Config{}, fmt.Errorf("reading provisioning metadata: %w", err)
 	}
@@ -376,6 +383,7 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	}
 	logger.Info("azure: read provisioning metadata from OVF (bytes=%d)", len(ovfRaw))
 
+	logger.Info("azure: [4/4] parsing provisioning metadata and synthesizing Ignition config")
 	provisioning, err := parseProvisioningConfig(ovfRaw)
 	if err != nil {
 		return types.Config{}, fmt.Errorf("parsing provisioning metadata: %w", err)
