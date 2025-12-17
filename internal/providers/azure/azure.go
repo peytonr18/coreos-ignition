@@ -427,15 +427,12 @@ func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
 			break
 		}
 		
-		if errors.Is(err, resource.ErrNeedNet) {
-			if attempt < maxNetRetries-1 {
-				logger.Info("azure: networking not ready for IMDS, retrying in %v (attempt %d/%d)", netRetryDelay, attempt+1, maxNetRetries)
-				time.Sleep(netRetryDelay)
-				continue
-			}
-			logger.Warning("azure: networking not available after %d attempts", maxNetRetries)
+		if attempt < maxNetRetries-1 {
+			logger.Info("azure: IMDS request failed, retrying in %v (attempt %d/%d): %v", netRetryDelay, attempt+1, maxNetRetries, err)
+			time.Sleep(netRetryDelay)
+			continue
 		}
-		return nil, fmt.Errorf("fetching metadata: %w", err)
+		logger.Warning("azure: IMDS failed after %d attempts: %v", maxNetRetries, err)
 	}
 	
 	if err != nil {
