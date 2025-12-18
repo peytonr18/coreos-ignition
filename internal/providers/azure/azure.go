@@ -77,7 +77,7 @@ var (
 		Scheme:   "http",
 		Host:     "169.254.169.254",
 		Path:     "metadata/instance",
-		RawQuery: "api-version=2021-01-01&format=json&extended=true",
+		RawQuery: "api-version=2021-03-01&format=json&extended=true",
 	}
 )
 
@@ -367,39 +367,85 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	logger := f.Logger
 	logger.Info("azure: [1/4] generating cloud config via IMDS + OVF metadata")
 	logger.Info("azure: [2/4] requesting instance metadata from IMDS")
+	meta, imdsErr := fetchInstanceMetadataFunc(f)
 	meta, err := fetchInstanceMetadataFunc(f)
 	if err != nil {
-		return types.Config{}, fmt.Errorf("fetching instance metadata: %w", err)
+		logger.Warning("azure: failed to fetch instance metadata from IMDS: %v", err)
+		meta = nil
+	} else {
+		logger.Info("azure: fetched instance metadata from IMDS: %+v", meta)
 	}
-	logger.Info("azure: fetched instance metadata from IMDS")
 
 	logger.Info("azure: [3/4] reading OVF provisioning metadata from attached media")
+	ovfRaw, ovfErr := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
+	if ovfErr != nil {
+		logger.Warning("azure: failed to read OVF provisioning metadata: %v", ovfErr)
 	ovfRaw, err := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
 	if err != nil {
-		return types.Config{}, fmt.Errorf("reading provisioning metadata: %w", err)
+		logger.Warning("azure: failed to read OVF provisioning metadata: %v", err)
+		ovfRaw = nil
+	} else if len(ovfRaw) == 0 {
+		logger.Warning("azure: ovf-env.xml was empty")
+		ovfRaw = nil
+	} else {
+		logger.Info("azure: read provisioning metadata from OVF (bytes=%d)", len(ovfRaw))
 	}
-	if len(ovfRaw) == 0 {
-		return types.Config{}, fmt.Errorf("ovf-env.xml was empty")
-	}
-	logger.Info("azure: read provisioning metadata from OVF (bytes=%d)", len(ovfRaw))
 
 	logger.Info("azure: [4/4] parsing provisioning metadata and synthesizing Ignition config")
-	provisioning, err := parseProvisioningConfig(ovfRaw)
-	if err != nil {
-		return types.Config{}, fmt.Errorf("parsing provisioning metadata: %w", err)
+	var provisioning *linuxProvisioningConfigurationSet
+	if ovfRaw != nil {
+		provisioning, err = parseProvisioningConfig(ovfRaw)
+		if err != nil {
+			logger.Warning("azure: failed to parse provisioning metadata: %v", err)
+			provisioning = nil
+		} else {
+			logger.Info("azure: successfully parsed provisioning metadata from ovfRaw")
+		}
 	}
 
 	cfg, err := buildGeneratedConfig(meta, provisioning)
 	if err == nil {
 		logger.Info("azure: generated cloud config successfully")
+	} else {
+		logger.Warning("azure: failed to generate cloud config: %v", err)
 	}
 	return cfg, err
 }
 
 func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
+	logger := f.Logger
 	headers := make(http.Header)
 	headers.Set("Metadata", "true")
-	data, err := f.FetchToBuffer(imdsInstanceURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
+
+	// Retry IMDS metadata fetch if networking isn't ready yet
+	const maxNetRetries = 10
+	const netRetryDelay = 2 * time.Second
+
+	var data []byte
+	var err error
+
+	for attempt := 0; attempt < maxNetRetries; attempt++ {
+		data, err = f.FetchToBuffer(imdsInstanceURL, resource.FetchOptions{Headers: headers, RetryCodes: imdsRetryCodes})
+		if err == nil {
+			break
+		}
+
+		if errors.Is(err, resource.ErrNeedNet) {
+			if attempt < maxNetRetries-1 {
+				logger.Info("azure: networking not ready for IMDS, retrying in %v (attempt %d/%d)", netRetryDelay, attempt+1, maxNetRetries)
+				time.Sleep(netRetryDelay)
+				continue
+			}
+			logger.Warning("azure: networking not available after %d attempts", maxNetRetries)
+		if attempt < maxNetRetries-1 {
+			logger.Info("azure: IMDS request failed, retrying in %v (attempt %d/%d): %v", netRetryDelay, attempt+1, maxNetRetries, err)
+			time.Sleep(netRetryDelay)
+			continue
+		}
+		return nil, fmt.Errorf("fetching metadata: %w", err)
+		logger.Warning("azure: IMDS failed after %d attempts: %v", maxNetRetries, err)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("fetching metadata: %w", err)
 	}
