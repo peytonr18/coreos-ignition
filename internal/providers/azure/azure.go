@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -31,7 +32,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/coreos/vcontext/report"
-	"github.com/flatcar/ignition/v2/config/shared/errors"
+	configErrors "github.com/flatcar/ignition/v2/config/shared/errors"
 	cfgutil "github.com/flatcar/ignition/v2/config/util"
 	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
 	execUtil "github.com/flatcar/ignition/v2/internal/exec/util"
@@ -136,19 +137,16 @@ func fetchFromAzureMetadata(f *resource.Fetcher) (types.Config, report.Report, e
 	// we first try to fetch config from IMDS, in case of failure we fallback on the custom data.
 	logger.Info("azure: attempting to read userdata from IMDS")
 	userData, err := fetchFromIMDS(f)
-	if err == nil {
+	switch {
+	case err == nil:
 		logger.Info("config has been read from IMDS userdata")
 		return util.ParseConfig(logger, userData)
+	case errors.Is(err, configErrors.ErrEmpty):
+		logger.Debug("azure: IMDS returned empty userdata, falling back to custom data")
+	default:
+		logger.Warning("azure: IMDS userdata request failed, falling back to custom data: %v", err)
 	}
 
-	if err != nil && err != errors.ErrEmpty {
-		logger.Warning("azure: IMDS userdata request failed: %v", err)
-	}
-	if err != errors.ErrEmpty {
-		return types.Config{}, report.Report{}, err
-	}
-
-	logger.Debug("failed to retrieve userdata from IMDS, falling back to custom data: %v", err)
 	return FetchFromOvfDevice(f, []string{CDS_FSTYPE_UDF})
 }
 
@@ -171,7 +169,7 @@ func fetchFromIMDS(f *resource.Fetcher) ([]byte, error) {
 	n := len(data)
 
 	if n == 0 {
-		return nil, errors.ErrEmpty
+		return nil, configErrors.ErrEmpty
 	}
 
 	// data is base64 encoded by the IMDS
@@ -367,22 +365,21 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	logger := f.Logger
 	logger.Info("azure: [1/4] generating cloud config via IMDS + OVF metadata")
 	logger.Info("azure: [2/4] requesting instance metadata from IMDS")
-	meta, imdsErr := fetchInstanceMetadataFunc(f)
-	meta, err := fetchInstanceMetadataFunc(f)
-	if err != nil {
-		logger.Warning("azure: failed to fetch instance metadata from IMDS: %v", err)
+	meta, metaErr := fetchInstanceMetadataFunc(f)
+	if metaErr != nil {
+		metaErr = fmt.Errorf("fetching instance metadata: %w", metaErr)
+		logger.Warning("azure: failed to fetch instance metadata from IMDS: %v", metaErr)
 		meta = nil
 	} else {
 		logger.Info("azure: fetched instance metadata from IMDS: %+v", meta)
 	}
 
 	logger.Info("azure: [3/4] reading OVF provisioning metadata from attached media")
-	ovfRaw, ovfErr := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
-	if ovfErr != nil {
-		logger.Warning("azure: failed to read OVF provisioning metadata: %v", ovfErr)
 	ovfRaw, err := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
+	var provisioningErr error
 	if err != nil {
-		logger.Warning("azure: failed to read OVF provisioning metadata: %v", err)
+		provisioningErr = fmt.Errorf("reading OVF provisioning metadata: %w", err)
+		logger.Warning("azure: failed to read OVF provisioning metadata: %v", provisioningErr)
 		ovfRaw = nil
 	} else if len(ovfRaw) == 0 {
 		logger.Warning("azure: ovf-env.xml was empty")
@@ -396,20 +393,49 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	if ovfRaw != nil {
 		provisioning, err = parseProvisioningConfig(ovfRaw)
 		if err != nil {
-			logger.Warning("azure: failed to parse provisioning metadata: %v", err)
+			provisioningErr = fmt.Errorf("parsing OVF provisioning metadata: %w", err)
+			logger.Warning("azure: failed to parse provisioning metadata: %v", provisioningErr)
 			provisioning = nil
 		} else {
 			logger.Info("azure: successfully parsed provisioning metadata from ovfRaw")
 		}
 	}
 
-	cfg, err := buildGeneratedConfig(meta, provisioning)
-	if err == nil {
-		logger.Info("azure: generated cloud config successfully")
-	} else {
-		logger.Warning("azure: failed to generate cloud config: %v", err)
+	// Log summary of available data before building config
+	logger.Info("azure: data summary before config generation:")
+	logger.Info("azure:   IMDS metadata available: %v", meta != nil)
+	logger.Info("azure:   OVF provisioning available: %v", provisioning != nil)
+	if meta != nil {
+		logger.Info("azure:   IMDS username: %q", meta.Compute.OSProfile.AdminUsername)
+		logger.Info("azure:   IMDS SSH keys count: %d", len(meta.Compute.PublicKeys))
 	}
-	return cfg, err
+	if provisioning != nil {
+		logger.Info("azure:   OVF username: %q", provisioning.UserName)
+		logger.Info("azure:   OVF has password: %v", provisioning.UserPassword != "")
+		logger.Info("azure:   OVF SSH keys count: %d", len(provisioning.SSH.PublicKeys))
+	}
+
+	if meta == nil && provisioning == nil {
+		logger.Warning("azure: both IMDS and OVF data are unavailable - config generation will likely fail")
+		switch {
+		case metaErr != nil:
+			return types.Config{}, metaErr
+		case provisioningErr != nil:
+			return types.Config{}, provisioningErr
+		default:
+			return types.Config{}, fmt.Errorf("azure: no instance metadata or provisioning data available")
+		}
+	}
+
+	cfg, err := buildGeneratedConfig(logger, meta, provisioning)
+	if err != nil {
+		logger.Warning("azure: failed to build generated config: %v", err)
+		return types.Config{}, err
+	}
+
+	logger.Info("azure: generated cloud config successfully")
+	logger.Info("azure: config includes user %q with %d SSH keys", cfg.Passwd.Users[0].Name, len(cfg.Passwd.Users[0].SSHAuthorizedKeys))
+	return cfg, nil
 }
 
 func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
@@ -430,19 +456,11 @@ func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
 			break
 		}
 
-		if errors.Is(err, resource.ErrNeedNet) {
-			if attempt < maxNetRetries-1 {
-				logger.Info("azure: networking not ready for IMDS, retrying in %v (attempt %d/%d)", netRetryDelay, attempt+1, maxNetRetries)
-				time.Sleep(netRetryDelay)
-				continue
-			}
-			logger.Warning("azure: networking not available after %d attempts", maxNetRetries)
 		if attempt < maxNetRetries-1 {
 			logger.Info("azure: IMDS request failed, retrying in %v (attempt %d/%d): %v", netRetryDelay, attempt+1, maxNetRetries, err)
 			time.Sleep(netRetryDelay)
 			continue
 		}
-		return nil, fmt.Errorf("fetching metadata: %w", err)
 		logger.Warning("azure: IMDS failed after %d attempts: %v", maxNetRetries, err)
 	}
 
@@ -505,17 +523,24 @@ func parseProvisioningConfig(raw []byte) (*linuxProvisioningConfigurationSet, er
 	return &env.LinuxProvisioningConfigurationSet, nil
 }
 
-func buildGeneratedConfig(meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) (types.Config, error) {
-	username := strings.TrimSpace(meta.Compute.OSProfile.AdminUsername)
-	if username == "" {
+func buildGeneratedConfig(logger *log.Logger, meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) (types.Config, error) {
+	var username string
+	if meta != nil {
+		username = strings.TrimSpace(meta.Compute.OSProfile.AdminUsername)
+	}
+	if username == "" && provisioning != nil {
 		username = strings.TrimSpace(provisioning.UserName)
 	}
 	if username == "" {
-		return types.Config{}, fmt.Errorf("unable to determine admin username from metadata or provisioning data")
+		return types.Config{}, fmt.Errorf("unable to determine admin username: IMDS returned empty/nil, OVF returned empty/nil")
 	}
 
-	password := strings.TrimSpace(provisioning.UserPassword)
-	passwordAuthDisabled := provisioning.passwordAuthDisabled()
+	var password string
+	var passwordAuthDisabled bool
+	if provisioning != nil {
+		password = strings.TrimSpace(provisioning.UserPassword)
+		passwordAuthDisabled = provisioning.passwordAuthDisabled()
+	}
 
 	sshKeys := collectSSHPublicKeys(meta, provisioning)
 
@@ -553,6 +578,9 @@ AllowUsers %s
 `, passwordSetting, username)
 	sshdFile := newDataFile("/etc/ssh/sshd_config.d/10-custom.conf", 0644, sshConfig)
 
+	files := []types.File{sudoersFile, sshdFile}
+	files = append(files, provisioningDataFiles(logger, provisioning)...)
+
 	return types.Config{
 		Ignition: types.Ignition{
 			Version: types.MaxVersion.String(),
@@ -561,9 +589,34 @@ AllowUsers %s
 			Users: []types.PasswdUser{user},
 		},
 		Storage: types.Storage{
-			Files: []types.File{sudoersFile, sshdFile},
+			Files: files,
 		},
 	}, nil
+}
+
+func provisioningDataFiles(logger *log.Logger, provisioning *linuxProvisioningConfigurationSet) []types.File {
+	if provisioning == nil {
+		return nil
+	}
+
+	var files []types.File
+	if data := strings.TrimSpace(provisioning.CustomData); data != "" {
+		decoded, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			if logger != nil {
+				logger.Warning("azure: failed to decode provisioning CustomData, storing raw value: %v", err)
+			}
+			files = append(files, newDataFile("/var/lib/waagent/CustomData", 0600, data))
+		} else {
+			files = append(files, newDataFile("/var/lib/waagent/CustomData", 0600, string(decoded)))
+		}
+	}
+
+	if data := strings.TrimSpace(provisioning.UserData); data != "" {
+		files = append(files, newDataFile("/var/lib/waagent/UserData", 0600, data))
+	}
+
+	return files
 }
 
 func collectSSHPublicKeys(meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) []types.SSHAuthorizedKey {

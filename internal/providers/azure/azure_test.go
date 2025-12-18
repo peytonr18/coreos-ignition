@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/flatcar/ignition/v2/config/v3_6_experimental/types"
 	"github.com/flatcar/ignition/v2/internal/log"
 	"github.com/flatcar/ignition/v2/internal/resource"
+	"github.com/vincent-petithory/dataurl"
 )
 
 type stubFetcher struct {
@@ -32,6 +34,35 @@ func (f *stubFetcher) FetchToBuffer(u url.URL, opts resource.FetchOptions) ([]by
 		return data, nil
 	}
 	return nil, fmt.Errorf("unexpected URL %s", u.String())
+}
+
+func testLogger(t *testing.T) *log.Logger {
+	t.Helper()
+	logger := log.New(true)
+	t.Cleanup(func() {
+		logger.Close()
+	})
+	return &logger
+}
+
+func fileByPath(t *testing.T, files []types.File, path string) *types.File {
+	t.Helper()
+	for i := range files {
+		if files[i].Node.Path == path {
+			return &files[i]
+		}
+	}
+	t.Fatalf("file %s not found", path)
+	return nil
+}
+
+func dataURLContents(t *testing.T, src string) string {
+	t.Helper()
+	du, err := dataurl.DecodeString(src)
+	if err != nil {
+		t.Fatalf("failed to decode data URL: %v", err)
+	}
+	return string(du.Data)
 }
 
 func TestParseProvisioningConfig(t *testing.T) {
@@ -115,7 +146,7 @@ func TestBuildGeneratedConfig(t *testing.T) {
 		UserPassword: "plaintext",
 	}
 
-	cfg, err := buildGeneratedConfig(meta, prov)
+	cfg, err := buildGeneratedConfig(testLogger(t), meta, prov)
 	if err != nil {
 		t.Fatalf("buildGeneratedConfig() err = %v", err)
 	}
@@ -157,7 +188,7 @@ func TestBuildGeneratedConfigWithPrehashedPassword(t *testing.T) {
 		UserPassword: prehashedPassword,
 	}
 
-	cfg, err := buildGeneratedConfig(meta, prov)
+	cfg, err := buildGeneratedConfig(testLogger(t), meta, prov)
 	if err != nil {
 		t.Fatalf("buildGeneratedConfig() err = %v", err)
 	}
@@ -171,7 +202,7 @@ func TestBuildGeneratedConfigWithPrehashedPassword(t *testing.T) {
 func TestBuildGeneratedConfigErrors(t *testing.T) {
 	meta := &instanceMetadata{}
 	prov := &linuxProvisioningConfigurationSet{}
-	if _, err := buildGeneratedConfig(meta, prov); err == nil {
+	if _, err := buildGeneratedConfig(testLogger(t), meta, prov); err == nil {
 		t.Fatalf("expected error when username missing")
 	}
 }
@@ -189,7 +220,7 @@ func TestBuildGeneratedConfigUsernamePriority(t *testing.T) {
 		UserName: "ovf-user",
 	}
 
-	cfg, err := buildGeneratedConfig(meta, prov)
+	cfg, err := buildGeneratedConfig(testLogger(t), meta, prov)
 	if err != nil {
 		t.Fatalf("buildGeneratedConfig() err = %v", err)
 	}
@@ -211,7 +242,7 @@ func TestBuildGeneratedConfigUsernameFallback(t *testing.T) {
 		UserName: "ovf-user",
 	}
 
-	cfg, err := buildGeneratedConfig(meta, prov)
+	cfg, err := buildGeneratedConfig(testLogger(t), meta, prov)
 	if err != nil {
 		t.Fatalf("buildGeneratedConfig() err = %v", err)
 	}
@@ -230,7 +261,7 @@ func TestBuildGeneratedConfigNoPassword(t *testing.T) {
 	}
 	prov := &linuxProvisioningConfigurationSet{}
 
-	cfg, err := buildGeneratedConfig(meta, prov)
+	cfg, err := buildGeneratedConfig(testLogger(t), meta, prov)
 	if err != nil {
 		t.Fatalf("buildGeneratedConfig() err = %v", err)
 	}
@@ -353,6 +384,7 @@ func TestGenerateCloudConfigSuccess(t *testing.T) {
     <UserName>ovf-user</UserName>
     <UserPassword>password</UserPassword>
     <DisableSshPasswordAuthentication>true</DisableSshPasswordAuthentication>
+    <CustomData>ZWNobyBoZWxsbwo=</CustomData>
     <SSH>
       <PublicKeys>
         <PublicKey><Value>ssh-ed25519 BBBB</Value></PublicKey>
@@ -378,8 +410,15 @@ func TestGenerateCloudConfigSuccess(t *testing.T) {
 	if len(cfg.Passwd.Users[0].SSHAuthorizedKeys) != 2 {
 		t.Fatalf("expected merged ssh keys, got %d", len(cfg.Passwd.Users[0].SSHAuthorizedKeys))
 	}
-	if len(cfg.Storage.Files) != 2 {
-		t.Fatalf("expected 2 generated files, got %d", len(cfg.Storage.Files))
+	if len(cfg.Storage.Files) != 3 {
+		t.Fatalf("expected 3 generated files, got %d", len(cfg.Storage.Files))
+	}
+	customFile := fileByPath(t, cfg.Storage.Files, "/var/lib/waagent/CustomData")
+	if customFile.Contents.Source == nil {
+		t.Fatalf("expected custom data file to have contents")
+	}
+	if got := dataURLContents(t, *customFile.Contents.Source); got != "echo hello\n" {
+		t.Fatalf("unexpected custom data contents: %q", got)
 	}
 }
 
@@ -400,5 +439,38 @@ func TestGenerateCloudConfigNeedNet(t *testing.T) {
 	_, err := generateCloudConfig(&fetcher.Fetcher)
 	if err == nil || err.Error() != fmt.Sprintf("fetching instance metadata: %v", wantErr) {
 		t.Fatalf("expected wrapped ErrNeedNet, got %v", err)
+	}
+}
+
+func TestGenerateCloudConfigFallbackToProvisioning(t *testing.T) {
+	t.Cleanup(func() {
+		fetchInstanceMetadataFunc = fetchInstanceMetadata
+		readOvfEnvironmentFunc = readOvfEnvironment
+	})
+
+	fetchInstanceMetadataFunc = func(f *resource.Fetcher) (*instanceMetadata, error) {
+		return nil, fmt.Errorf("imds unavailable")
+	}
+	ovf := []byte(`<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
+  <LinuxProvisioningConfigurationSet>
+    <UserName>ovf-only</UserName>
+    <SSH>
+      <PublicKeys>
+        <PublicKey><Value>ssh-rsa OOOO</Value></PublicKey>
+      </PublicKeys>
+    </SSH>
+  </LinuxProvisioningConfigurationSet>
+</wa:ProvisioningSection>`)
+	readOvfEnvironmentFunc = func(f *resource.Fetcher, _ []string) ([]byte, error) {
+		return ovf, nil
+	}
+
+	fetcher := newStubFetcher()
+	cfg, err := generateCloudConfig(&fetcher.Fetcher)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if cfg.Passwd.Users[0].Name != "ovf-only" {
+		t.Fatalf("expected username from provisioning data, got %s", cfg.Passwd.Users[0].Name)
 	}
 }

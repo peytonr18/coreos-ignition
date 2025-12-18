@@ -73,9 +73,9 @@ func ignitionMain() {
 
 	flag.Parse()
 
-	// Always generate a cloud-config on Azure without requiring extra drop-ins.
-	if flags.platform.String() == "azure" {
-		flags.generateCloudConfig = true
+	// Never allow cloud config generation during fetch-offline stage (no networking)
+	if flags.stage.String() == "fetch-offline" {
+		flags.generateCloudConfig = false
 	}
 
 	if flags.version {
@@ -98,6 +98,8 @@ func ignitionMain() {
 
 	logger.Info("%s", version.String)
 	logger.Info("Stage: %v", flags.stage)
+	logger.Info("Platform: %v", flags.platform)
+	logger.Info("GenerateCloudConfig: %v", flags.generateCloudConfig)
 
 	platformConfig := platform.MustGet(flags.platform.String())
 	fetcher, err := platformConfig.NewFetcher(&logger)
