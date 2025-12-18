@@ -74,7 +74,7 @@ func ignitionMain() {
 	flag.Parse()
 
 	// Always generate a cloud-config on Azure without requiring extra drop-ins.
-	if flags.platform.String() == "azure" {
+	if flags.platform.String() == "azure" && flags.stage.String() == "fetch" {
 		flags.generateCloudConfig = true
 	}
 
