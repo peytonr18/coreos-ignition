@@ -76,7 +76,7 @@ func ignitionMain() {
 
 	fmt.Printf("%s\n", flags.stage.String())
 
-	fmt.Printf("%s\n", flags.stage.Name().String())
+	fmt.Printf("%s\n", flags.stage.Names())
 
 	fmt.Printf("%s\n", flags.stage)
 
