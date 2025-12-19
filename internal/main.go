@@ -74,9 +74,11 @@ func ignitionMain() {
 
 	flag.Parse()
 
+	fmt.Printf("%s\n", flags.stage.String())
+
 	// Never allow cloud config generation during fetch-offline stage (no networking)
-	if flags.stage.String() == "fetch-offline" {
-		flags.generateCloudConfig = false
+	if flags.stage.String() == "fetch" {
+			flags.generateCloudConfig = true
 	}
 
 	if flags.version {
@@ -101,6 +103,7 @@ func ignitionMain() {
 	logger.Info("Stage: %v", flags.stage)
 	logger.Info("Platform: %v", flags.platform)
 	logger.Info("GenerateCloudConfig: %v", flags.generateCloudConfig)
+
 	// Log the raw flag presence to debug systemd ExecStart argument passing.
 	// We only log the generate-cloud-config flag, not the full os.Args, to avoid
 	// leaking any sensitive args that might be passed via IGNITION_ARGS.
