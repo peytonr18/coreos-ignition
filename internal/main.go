@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/flatcar/ignition/v2/config"
@@ -100,6 +101,16 @@ func ignitionMain() {
 	logger.Info("Stage: %v", flags.stage)
 	logger.Info("Platform: %v", flags.platform)
 	logger.Info("GenerateCloudConfig: %v", flags.generateCloudConfig)
+	// Log the raw flag presence to debug systemd ExecStart argument passing.
+	// We only log the generate-cloud-config flag, not the full os.Args, to avoid
+	// leaking any sensitive args that might be passed via IGNITION_ARGS.
+	rawGenerateCloudConfigArg := "<absent>"
+	for _, arg := range os.Args {
+		if strings.HasPrefix(arg, "--generate-cloud-config") {
+			rawGenerateCloudConfigArg = arg
+		}
+	}
+	logger.Info("Arg --generate-cloud-config: %s", rawGenerateCloudConfigArg)
 
 	platformConfig := platform.MustGet(flags.platform.String())
 	fetcher, err := platformConfig.NewFetcher(&logger)

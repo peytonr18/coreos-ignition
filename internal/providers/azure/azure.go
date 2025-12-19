@@ -134,17 +134,30 @@ func fetchFromAzureMetadata(f *resource.Fetcher) (types.Config, report.Report, e
 
 	logger := f.Logger
 
-	// we first try to fetch config from IMDS, in case of failure we fallback on the custom data.
+	// We first try to fetch config from IMDS.  If it fails, retry a few times
+	// before falling back to custom data from the OVF media.
 	logger.Info("azure: attempting to read userdata from IMDS")
-	userData, err := fetchFromIMDS(f)
-	switch {
-	case err == nil:
-		logger.Info("config has been read from IMDS userdata")
-		return util.ParseConfig(logger, userData)
-	case errors.Is(err, configErrors.ErrEmpty):
-		logger.Debug("azure: IMDS returned empty userdata, falling back to custom data")
-	default:
-		logger.Warning("azure: IMDS userdata request failed, falling back to custom data: %v", err)
+	const maxUserdataRetries = 10
+	const userdataRetryDelay = 2 * time.Second
+
+	var userData []byte
+	var err error
+	for attempt := 0; attempt < maxUserdataRetries; attempt++ {
+		userData, err = fetchFromIMDS(f)
+		if err == nil {
+			logger.Info("config has been read from IMDS userdata")
+			return util.ParseConfig(logger, userData)
+		}
+		if errors.Is(err, configErrors.ErrEmpty) {
+			logger.Info("azure: IMDS userdata was empty, falling back to custom data")
+			break
+		}
+		if attempt < maxUserdataRetries-1 {
+			logger.Info("azure: IMDS userdata request failed, retrying in %v (attempt %d/%d): %v", userdataRetryDelay, attempt+1, maxUserdataRetries, err)
+			time.Sleep(userdataRetryDelay)
+			continue
+		}
+		logger.Warning("azure: IMDS userdata request failed after %d attempts, falling back to custom data: %v", maxUserdataRetries, err)
 	}
 
 	return FetchFromOvfDevice(f, []string{CDS_FSTYPE_UDF})
