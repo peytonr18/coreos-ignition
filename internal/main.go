@@ -82,6 +82,7 @@ func ignitionMain() {
 	if flags.stage == "fetch" {
 			fmt.Printf("%s\n", "HELLO")
 			flags.generateCloudConfig = true
+			fmt.Printf("%s\n", "pain and suffering")
 	}
 
 	if flags.version {
