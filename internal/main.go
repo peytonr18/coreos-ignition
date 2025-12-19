@@ -76,12 +76,11 @@ func ignitionMain() {
 
 	fmt.Printf("%s\n", flags.stage.String())
 
-	fmt.Printf("%s\n", flags.stage.Names())
-
 	fmt.Printf("%s\n", flags.stage)
 
 	// Never allow cloud config generation during fetch-offline stage (no networking)
 	if flags.stage == "fetch" {
+			fmt.Printf("%s\n", "HELLO")
 			flags.generateCloudConfig = true
 	}
 
