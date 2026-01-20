@@ -88,6 +88,12 @@ var (
 	ErrCexWithClevis             = errors.New("cannot use cex with clevis")
 	ErrCexWithKeyFile            = errors.New("cannot use key file with cex")
 
+	// Azure extensions errors
+	ErrAzureSshdDropInConflict    = errors.New("Azure sshd drop-in conflicts with user configuration")
+	ErrAzureSudoersDropInConflict = errors.New("Azure sudoers drop-in conflicts with user configuration")
+	ErrAzureUserConflict          = errors.New("Azure-managed user conflicts with user configuration")
+	ErrAzureResourceDiskConflict  = errors.New("Azure resource disk mount conflicts with user configuration")
+
 	// Systemd section errors
 	ErrInvalidSystemdExt       = errors.New("invalid systemd unit extension")
 	ErrInvalidSystemdDropinExt = errors.New("invalid systemd drop-in extension")

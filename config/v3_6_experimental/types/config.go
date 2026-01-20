@@ -61,5 +61,11 @@ func (cfg Config) Validate(c path.ContextPath) (r report.Report) {
 			r.AddOnError(c.Append("storage", "links", i, "path"), errors.ErrPathConflictsSystemd)
 		}
 	}
+
+	// Validate Azure extension conflicts
+	// Pass empty string for azureOsProfileAdminUser since it's not available at config parse time
+	// The Azure extension will perform this validation at runtime with the actual admin username
+	r.Merge(cfg.ValidateAzureConflicts(c, ""))
+
 	return
 }
