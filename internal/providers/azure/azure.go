@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright 2015 CoreOS, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +35,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	configErrors "github.com/coreos/ignition/v2/config/shared/errors"
 	cfgutil "github.com/coreos/ignition/v2/config/util"
+	latest "github.com/coreos/ignition/v2/config/v3_6_experimental"
 	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
 	execUtil "github.com/coreos/ignition/v2/internal/exec/util"
 	"github.com/coreos/ignition/v2/internal/log"
@@ -41,12 +44,17 @@ import (
 	"github.com/coreos/ignition/v2/internal/resource"
 	"github.com/vincent-petithory/dataurl"
 
+	"github.com/coreos/vcontext/path"
 	"github.com/coreos/vcontext/report"
 	"golang.org/x/sys/unix"
 )
 
 const (
 	configPath = "/CustomData.bin"
+
+	azureSshdDropInPath    = "/etc/ssh/sshd_config.d/50-azure-cloud-sshd.conf"
+	azureSudoersDropInPath = "/etc/sudoers.d/azure-cloud-sudoers.conf"
+	azureResourceDiskUnit  = "mnt-resource.mount"
 )
 
 // These constants come from <cdrom.h>.
@@ -97,10 +105,10 @@ var (
 
 func init() {
 	platform.Register(platform.Provider{
-		Name:                "azure",
-		NewFetcher:          newFetcher,
-		Fetch:               fetchConfig,
-		GenerateCloudConfig: generateCloudConfig,
+		Name:            "azure",
+		NewFetcher:      newFetcher,
+		Fetch:           fetchConfig,
+		ApplyExtensions: applyExtensions,
 	})
 }
 
@@ -445,7 +453,13 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 		}
 	}
 
-	cfg, err := buildGeneratedConfig(logger, meta, provisioning)
+	opts := azureExtensionOptions{
+		IncludeUser:              true,
+		IncludeSshdDropIn:        true,
+		IncludeSudoersDropIn:     true,
+		IncludeProvisioningFiles: true,
+	}
+	cfg, _, err := buildAzureConfig(logger, meta, provisioning, opts)
 	if err != nil {
 		logger.Warning("azure: failed to build generated config: %v", err)
 		return types.Config{}, err
@@ -454,6 +468,51 @@ func generateCloudConfig(f *resource.Fetcher) (types.Config, error) {
 	logger.Info("azure: generated cloud config successfully")
 	logger.Info("azure: config includes user %q with %d SSH keys", cfg.Passwd.Users[0].Name, len(cfg.Passwd.Users[0].SSHAuthorizedKeys))
 	return cfg, nil
+}
+
+func fetchAzureProvisioningData(f *resource.Fetcher) (*instanceMetadata, *linuxProvisioningConfigurationSet, error) {
+	logger := f.Logger
+
+	meta, metaErr := fetchInstanceMetadataFunc(f)
+	if metaErr != nil {
+		metaErr = fmt.Errorf("fetching instance metadata: %w", metaErr)
+		logger.Warning("azure: failed to fetch instance metadata from IMDS: %v", metaErr)
+		meta = nil
+	}
+
+	ovfRaw, err := readOvfEnvironmentFunc(f, []string{CDS_FSTYPE_UDF})
+	var provisioningErr error
+	if err != nil {
+		provisioningErr = fmt.Errorf("reading OVF provisioning metadata: %w", err)
+		logger.Warning("azure: failed to read OVF provisioning metadata: %v", provisioningErr)
+		ovfRaw = nil
+	} else if len(ovfRaw) == 0 {
+		logger.Warning("azure: ovf-env.xml was empty")
+		ovfRaw = nil
+	}
+
+	var provisioning *linuxProvisioningConfigurationSet
+	if ovfRaw != nil {
+		provisioning, err = parseProvisioningConfig(ovfRaw)
+		if err != nil {
+			provisioningErr = fmt.Errorf("parsing OVF provisioning metadata: %w", err)
+			logger.Warning("azure: failed to parse provisioning metadata: %v", provisioningErr)
+			provisioning = nil
+		}
+	}
+
+	if meta == nil && provisioning == nil {
+		switch {
+		case metaErr != nil:
+			return nil, nil, metaErr
+		case provisioningErr != nil:
+			return nil, nil, provisioningErr
+		default:
+			return nil, nil, fmt.Errorf("azure: no instance metadata or provisioning data available")
+		}
+	}
+
+	return meta, provisioning, nil
 }
 
 func fetchInstanceMetadata(f *resource.Fetcher) (*instanceMetadata, error) {
@@ -541,16 +600,61 @@ func parseProvisioningConfig(raw []byte) (*linuxProvisioningConfigurationSet, er
 	return &env.LinuxProvisioningConfigurationSet, nil
 }
 
-func buildGeneratedConfig(logger *log.Logger, meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) (types.Config, error) {
-	var username string
-	if meta != nil {
-		username = strings.TrimSpace(meta.Compute.OSProfile.AdminUsername)
+type azureExtensionOptions struct {
+	IncludeUser              bool
+	IncludeSshdDropIn        bool
+	IncludeSudoersDropIn     bool
+	IncludeResourceDisk      bool
+	IncludeProvisioningFiles bool
+}
+
+func applyExtensions(f *resource.Fetcher, cfg types.Config) (types.Config, error) {
+	azure := cfg.Ignition.Extensions.Azure
+	if !cfgutil.IsTrue(azure.ResourceDiskEnabled) &&
+		!cfgutil.IsTrue(azure.SshdDropInEnabled) &&
+		!cfgutil.IsTrue(azure.SudoersDropInEnabled) &&
+		!cfgutil.IsTrue(azure.UserEnabled) {
+		return cfg, nil
 	}
-	if username == "" && provisioning != nil {
-		username = strings.TrimSpace(provisioning.UserName)
+
+	opts := azureExtensionOptions{
+		IncludeUser:          cfgutil.IsTrue(azure.UserEnabled),
+		IncludeSshdDropIn:    cfgutil.IsTrue(azure.SshdDropInEnabled),
+		IncludeSudoersDropIn: cfgutil.IsTrue(azure.SudoersDropInEnabled),
+		IncludeResourceDisk:  cfgutil.IsTrue(azure.ResourceDiskEnabled),
 	}
-	if username == "" {
-		return types.Config{}, fmt.Errorf("unable to determine admin username: IMDS returned empty/nil, OVF returned empty/nil")
+
+	var meta *instanceMetadata
+	var provisioning *linuxProvisioningConfigurationSet
+	var err error
+	if opts.IncludeUser || opts.IncludeSshdDropIn {
+		meta, provisioning, err = fetchAzureProvisioningData(f)
+		if err != nil {
+			return types.Config{}, err
+		}
+	}
+
+	extCfg, adminUser, err := buildAzureConfig(f.Logger, meta, provisioning, opts)
+	if err != nil {
+		return types.Config{}, err
+	}
+	if cfg.Ignition.Version != "" {
+		extCfg.Ignition.Version = cfg.Ignition.Version
+	}
+
+	r := cfg.ValidateAzureConflicts(path.New("json"), adminUser)
+	if len(r.Entries) > 0 {
+		f.Logger.LogReport(r)
+		return types.Config{}, configErrors.ErrInvalid
+	}
+
+	return latest.Merge(cfg, extCfg), nil
+}
+
+func buildAzureConfig(logger *log.Logger, meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet, opts azureExtensionOptions) (types.Config, string, error) {
+	username := resolveAdminUsername(meta, provisioning)
+	if (opts.IncludeUser || opts.IncludeSshdDropIn) && username == "" {
+		return types.Config{}, "", fmt.Errorf("unable to determine admin username: IMDS returned empty/nil, OVF returned empty/nil")
 	}
 
 	var password string
@@ -560,56 +664,114 @@ func buildGeneratedConfig(logger *log.Logger, meta *instanceMetadata, provisioni
 		passwordAuthDisabled = provisioning.passwordAuthDisabled()
 	}
 
-	sshKeys := collectSSHPublicKeys(meta, provisioning)
-
-	user := types.PasswdUser{
-		Name:              username,
-		Groups:            []types.Group{"wheel"},
-		HomeDir:           cfgutil.StrToPtr(fmt.Sprintf("/home/%s", username)),
-		Shell:             cfgutil.StrToPtr("/bin/bash"),
-		SSHAuthorizedKeys: sshKeys,
+	cfg := types.Config{
+		Ignition: types.Ignition{
+			Version: types.MaxVersion.String(),
+		},
 	}
-	if password != "" {
-		// Hash the password if it's not already hashed
-		var passwordHash string
-		if IsPasswordHashed(password) {
-			passwordHash = password
-		} else {
-			var err error
-			passwordHash, err = HashPassword(password)
-			if err != nil {
-				return types.Config{}, fmt.Errorf("hashing password: %w", err)
-			}
+
+	if opts.IncludeUser {
+		sshKeys := collectSSHPublicKeys(meta, provisioning)
+		user := types.PasswdUser{
+			Name:              username,
+			Groups:            []types.Group{"wheel"},
+			HomeDir:           cfgutil.StrToPtr(fmt.Sprintf("/home/%s", username)),
+			Shell:             cfgutil.StrToPtr("/bin/bash"),
+			SSHAuthorizedKeys: sshKeys,
 		}
-		user.PasswordHash = cfgutil.StrToPtr(passwordHash)
+		if password != "" {
+			// Hash the password if it's not already hashed
+			var passwordHash string
+			if IsPasswordHashed(password) {
+				passwordHash = password
+			} else {
+				var err error
+				passwordHash, err = HashPassword(password)
+				if err != nil {
+					return types.Config{}, "", fmt.Errorf("hashing password: %w", err)
+				}
+			}
+			user.PasswordHash = cfgutil.StrToPtr(passwordHash)
+		}
+		cfg.Passwd.Users = []types.PasswdUser{user}
 	}
 
-	sudoersFile := newDataFile("/etc/sudoers.d/50-azure-cloud-config", 0440, "%wheel ALL=(ALL) NOPASSWD: ALL\n")
-	passwordSetting := "no"
-	if password != "" && !passwordAuthDisabled {
-		passwordSetting = "yes"
+	if opts.IncludeSudoersDropIn {
+		sudoersFile := newDataFile(azureSudoersDropInPath, 0440, "%wheel ALL=(ALL) NOPASSWD: ALL\n")
+		cfg.Storage.Files = append(cfg.Storage.Files, sudoersFile)
 	}
-	sshConfig := fmt.Sprintf(`# Custom SSHD settings
+
+	if opts.IncludeSshdDropIn {
+		passwordSetting := "no"
+		if password != "" && !passwordAuthDisabled {
+			passwordSetting = "yes"
+		}
+		sshConfig := fmt.Sprintf(`# Custom SSHD settings
 PasswordAuthentication %s
 PermitRootLogin no
 AllowUsers %s
 `, passwordSetting, username)
-	sshdFile := newDataFile("/etc/ssh/sshd_config.d/50-azure-cloud-config.conf", 0644, sshConfig)
+		sshdFile := newDataFile(azureSshdDropInPath, 0644, sshConfig)
+		cfg.Storage.Files = append(cfg.Storage.Files, sshdFile)
+	}
 
-	files := []types.File{sudoersFile, sshdFile}
-	files = append(files, provisioningDataFiles(logger, provisioning)...)
+	if opts.IncludeResourceDisk {
+		cfg.Systemd.Units = append(cfg.Systemd.Units, newResourceDiskUnit())
+	}
 
-	return types.Config{
-		Ignition: types.Ignition{
-			Version: types.MaxVersion.String(),
-		},
-		Passwd: types.Passwd{
-			Users: []types.PasswdUser{user},
-		},
-		Storage: types.Storage{
-			Files: files,
-		},
-	}, nil
+	if opts.IncludeProvisioningFiles {
+		cfg.Storage.Files = append(cfg.Storage.Files, provisioningDataFiles(logger, provisioning)...)
+	}
+
+	return cfg, username, nil
+}
+
+// buildGeneratedConfig preserves the legacy generator path for tests and callers
+// that still expect the old helper.
+func buildGeneratedConfig(logger *log.Logger, meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) (types.Config, error) {
+	opts := azureExtensionOptions{
+		IncludeUser:              true,
+		IncludeSshdDropIn:        true,
+		IncludeSudoersDropIn:     true,
+		IncludeProvisioningFiles: true,
+	}
+	cfg, _, err := buildAzureConfig(logger, meta, provisioning, opts)
+	return cfg, err
+}
+
+func resolveAdminUsername(meta *instanceMetadata, provisioning *linuxProvisioningConfigurationSet) string {
+	if meta != nil {
+		if username := strings.TrimSpace(meta.Compute.OSProfile.AdminUsername); username != "" {
+			return username
+		}
+	}
+	if provisioning != nil {
+		return strings.TrimSpace(provisioning.UserName)
+	}
+	return ""
+}
+
+func newResourceDiskUnit() types.Unit {
+	contents := `[Unit]
+Description=Azure Resource Disk
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=local-fs.target
+
+[Mount]
+What=/dev/disk/cloud/azure_resource-part1
+Where=/mnt/resource
+Type=ext4
+Options=defaults,nofail
+
+[Install]
+WantedBy=local-fs.target
+`
+	return types.Unit{
+		Name:     azureResourceDiskUnit,
+		Enabled:  cfgutil.BoolToPtr(true),
+		Contents: cfgutil.StrToPtr(contents),
+	}
 }
 
 func provisioningDataFiles(logger *log.Logger, provisioning *linuxProvisioningConfigurationSet) []types.File {

@@ -50,7 +50,8 @@ type Provider struct {
 	DelConfig  func(f *resource.Fetcher) error
 
 	// Generates a platform-specific Ignition config from cloud provider metadata.
-	GenerateCloudConfig func(f *resource.Fetcher) (types.Config, error)
+	// Applies platform-specific extensions to a rendered config.
+	ApplyExtensions func(f *resource.Fetcher, cfg types.Config) (types.Config, error)
 
 	// Fetch, and also save output files to be written during files stage.
 	// Avoid, unless you're certain you need it.
@@ -107,11 +108,11 @@ func (c Config) DelConfig(f *resource.Fetcher) error {
 	}
 }
 
-func (c Config) GenerateConfig(f *resource.Fetcher) (types.Config, error) {
-	if c.p.GenerateCloudConfig != nil {
-		return c.p.GenerateCloudConfig(f)
+func (c Config) ApplyExtensions(f *resource.Fetcher, cfg types.Config) (types.Config, error) {
+	if c.p.ApplyExtensions != nil {
+		return c.p.ApplyExtensions(f, cfg)
 	}
-	return types.Config{}, ErrNoProvider
+	return cfg, nil
 }
 
 var configs = registry.Create("platform configs")

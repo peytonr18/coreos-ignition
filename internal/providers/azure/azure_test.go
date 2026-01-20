@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright 2015 CoreOS, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +19,12 @@ package azure
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
+	configErrors "github.com/coreos/ignition/v2/config/shared/errors"
+	cfgutil "github.com/coreos/ignition/v2/config/util"
 	"github.com/coreos/ignition/v2/config/v3_6_experimental/types"
 	"github.com/coreos/ignition/v2/internal/log"
 	"github.com/coreos/ignition/v2/internal/resource"
@@ -377,7 +382,24 @@ func TestIsPasswordHashed(t *testing.T) {
 	}
 }
 
-func TestGenerateCloudConfigSuccess(t *testing.T) {
+func TestApplyExtensionsNoKnobs(t *testing.T) {
+	cfg := types.Config{
+		Ignition: types.Ignition{
+			Version: "3.6.0",
+		},
+	}
+
+	fetcher := newStubFetcher()
+	out, err := applyExtensions(&fetcher.Fetcher, cfg)
+	if err != nil {
+		t.Fatalf("applyExtensions() err = %v", err)
+	}
+	if !reflect.DeepEqual(cfg, out) {
+		t.Fatalf("expected config to be unchanged when no knobs enabled")
+	}
+}
+
+func TestApplyExtensionsKnobsEnabled(t *testing.T) {
 	t.Cleanup(func() {
 		fetchInstanceMetadataFunc = fetchInstanceMetadata
 		readOvfEnvironmentFunc = readOvfEnvironment
@@ -410,81 +432,93 @@ func TestGenerateCloudConfigSuccess(t *testing.T) {
 		return ovf, nil
 	}
 
+	cfg := types.Config{
+		Ignition: types.Ignition{
+			Version: "3.6.0",
+			Extensions: types.Extensions{
+				Azure: types.AzureExtensions{
+					UserEnabled:          cfgutil.BoolToPtr(true),
+					SshdDropInEnabled:    cfgutil.BoolToPtr(true),
+					SudoersDropInEnabled: cfgutil.BoolToPtr(true),
+					ResourceDiskEnabled:  cfgutil.BoolToPtr(true),
+				},
+			},
+		},
+	}
+
 	fetcher := newStubFetcher()
-	cfg, err := generateCloudConfig(&fetcher.Fetcher)
+	out, err := applyExtensions(&fetcher.Fetcher, cfg)
 	if err != nil {
-		t.Fatalf("generateCloudConfig() err = %v", err)
+		t.Fatalf("applyExtensions() err = %v", err)
 	}
-	if len(cfg.Passwd.Users) != 1 {
-		t.Fatalf("expected 1 user, got %d", len(cfg.Passwd.Users))
+
+	if len(out.Passwd.Users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(out.Passwd.Users))
 	}
-	if cfg.Passwd.Users[0].Name != "imds-user" {
-		t.Fatalf("expected username imds-user, got %s", cfg.Passwd.Users[0].Name)
+	if out.Passwd.Users[0].Name != "imds-user" {
+		t.Fatalf("expected username imds-user, got %s", out.Passwd.Users[0].Name)
 	}
-	if len(cfg.Passwd.Users[0].SSHAuthorizedKeys) != 2 {
-		t.Fatalf("expected merged ssh keys, got %d", len(cfg.Passwd.Users[0].SSHAuthorizedKeys))
+
+	if fileByPath(t, out.Storage.Files, azureSshdDropInPath) == nil {
+		t.Fatalf("expected sshd drop-in to be created")
 	}
-	if len(cfg.Storage.Files) != 3 {
-		t.Fatalf("expected 3 generated files, got %d", len(cfg.Storage.Files))
+	if fileByPath(t, out.Storage.Files, azureSudoersDropInPath) == nil {
+		t.Fatalf("expected sudoers drop-in to be created")
 	}
-	customFile := fileByPath(t, cfg.Storage.Files, "/var/lib/waagent/CustomData")
-	if customFile.Contents.Source == nil {
-		t.Fatalf("expected custom data file to have contents")
+	if fileByPath(t, out.Storage.Files, "/var/lib/waagent/CustomData") == nil {
+		t.Fatalf("expected provisioning CustomData file to be created")
 	}
-	if got := dataURLContents(t, *customFile.Contents.Source); got != "echo hello\n" {
-		t.Fatalf("unexpected custom data contents: %q", got)
+
+	foundUnit := false
+	for _, unit := range out.Systemd.Units {
+		if unit.Name == azureResourceDiskUnit {
+			foundUnit = true
+			break
+		}
+	}
+	if !foundUnit {
+		t.Fatalf("expected resource disk mount unit to be created")
 	}
 }
 
-func TestGenerateCloudConfigNeedNet(t *testing.T) {
+func TestApplyExtensionsConflict(t *testing.T) {
 	t.Cleanup(func() {
 		fetchInstanceMetadataFunc = fetchInstanceMetadata
 		readOvfEnvironmentFunc = readOvfEnvironment
 	})
-	wantErr := resource.ErrNeedNet
+
 	fetchInstanceMetadataFunc = func(f *resource.Fetcher) (*instanceMetadata, error) {
-		return nil, wantErr
+		return &instanceMetadata{
+			Compute: instanceComputeMetadata{
+				OSProfile: instanceOSProfile{AdminUsername: "imds-user"},
+			},
+		}, nil
 	}
 	readOvfEnvironmentFunc = func(f *resource.Fetcher, _ []string) ([]byte, error) {
-		return nil, fmt.Errorf("should not be called")
+		return nil, nil
+	}
+
+	cfg := types.Config{
+		Ignition: types.Ignition{
+			Version: "3.6.0",
+			Extensions: types.Extensions{
+				Azure: types.AzureExtensions{
+					SshdDropInEnabled: cfgutil.BoolToPtr(true),
+				},
+			},
+		},
+		Storage: types.Storage{
+			Files: []types.File{
+				{
+					Node: types.Node{Path: azureSshdDropInPath},
+				},
+			},
+		},
 	}
 
 	fetcher := newStubFetcher()
-	_, err := generateCloudConfig(&fetcher.Fetcher)
-	if err == nil || err.Error() != fmt.Sprintf("fetching instance metadata: %v", wantErr) {
-		t.Fatalf("expected wrapped ErrNeedNet, got %v", err)
-	}
-}
-
-func TestGenerateCloudConfigFallbackToProvisioning(t *testing.T) {
-	t.Cleanup(func() {
-		fetchInstanceMetadataFunc = fetchInstanceMetadata
-		readOvfEnvironmentFunc = readOvfEnvironment
-	})
-
-	fetchInstanceMetadataFunc = func(f *resource.Fetcher) (*instanceMetadata, error) {
-		return nil, fmt.Errorf("imds unavailable")
-	}
-	ovf := []byte(`<wa:ProvisioningSection xmlns:wa="http://schemas.microsoft.com/windowsazure">
-  <LinuxProvisioningConfigurationSet>
-    <UserName>ovf-only</UserName>
-    <SSH>
-      <PublicKeys>
-        <PublicKey><Value>ssh-rsa OOOO</Value></PublicKey>
-      </PublicKeys>
-    </SSH>
-  </LinuxProvisioningConfigurationSet>
-</wa:ProvisioningSection>`)
-	readOvfEnvironmentFunc = func(f *resource.Fetcher, _ []string) ([]byte, error) {
-		return ovf, nil
-	}
-
-	fetcher := newStubFetcher()
-	cfg, err := generateCloudConfig(&fetcher.Fetcher)
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-	if cfg.Passwd.Users[0].Name != "ovf-only" {
-		t.Fatalf("expected username from provisioning data, got %s", cfg.Passwd.Users[0].Name)
+	_, err := applyExtensions(&fetcher.Fetcher, cfg)
+	if err == nil || err != configErrors.ErrInvalid {
+		t.Fatalf("expected ErrInvalid for conflicting sshd drop-in, got %v", err)
 	}
 }
