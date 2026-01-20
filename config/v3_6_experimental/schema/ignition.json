@@ -80,6 +80,9 @@
         },
         "proxy": {
           "$ref": "#/definitions/ignition/definitions/proxy"
+        },
+        "extensions": {
+          "$ref": "#/definitions/ignition/definitions/extensions"
         }
       },
       "definitions": {
@@ -138,6 +141,31 @@
             },
             "httpTotal": {
               "type": ["integer", "null"]
+            }
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "properties": {
+            "azure": {
+              "$ref": "#/definitions/ignition/definitions/azure-extensions"
+            }
+          }
+        },
+        "azure-extensions": {
+          "type": "object",
+          "properties": {
+            "resourceDiskEnabled": {
+              "type": ["boolean", "null"]
+            },
+            "sshdDropInEnabled": {
+              "type": ["boolean", "null"]
+            },
+            "sudoersDropInEnabled": {
+              "type": ["boolean", "null"]
+            },
+            "userEnabled": {
+              "type": ["boolean", "null"]
             }
           }
         }
