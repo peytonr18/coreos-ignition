@@ -49,8 +49,7 @@ type Provider struct {
 	Status     func(stageName string, f resource.Fetcher, e error) error
 	DelConfig  func(f *resource.Fetcher) error
 
-	// Generates a platform-specific Ignition config from cloud provider metadata.
-	// Applies platform-specific extensions to a rendered config.
+	// Applies platform-specific extensions based on ignition.extensions.*, after config render.
 	ApplyExtensions func(f *resource.Fetcher, cfg types.Config) (types.Config, error)
 
 	// Fetch, and also save output files to be written during files stage.
