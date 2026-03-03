@@ -1,4 +1,5 @@
 ```mermaid
+flowchart TB
     %% ===== IGNITION BOOT FLOW =====
 
     %% --- Early Boot ---
