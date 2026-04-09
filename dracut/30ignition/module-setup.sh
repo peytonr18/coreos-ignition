@@ -93,6 +93,10 @@ install() {
     inst_simple "$moddir/ignition-generator" \
         "$systemdutildir/system-generators/ignition-generator"
 
+    # Test: hardcoded user.ign to verify /run/ignition merge path
+    inst_simple "$moddir/user.ign" \
+        "/run/ignition/user.ign"
+
     for x in "complete" "subsequent" "diskful" "diskful-subsequent"; do
         inst_simple "$moddir/ignition-$x.target" \
             "$systemdsystemunitdir/ignition-$x.target"

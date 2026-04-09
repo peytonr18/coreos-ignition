@@ -1,0 +1,12 @@
+{
+  "ignition": {
+    "version": "3.4.0"
+  },
+  "passwd": {
+    "users": [
+      {
+        "name": "peytonandcadetest"
+      }
+    ]
+  }
+}

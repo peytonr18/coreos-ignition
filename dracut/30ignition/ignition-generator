@@ -59,4 +59,8 @@ else
     fi
 fi
 
+# Runtime Ignition config fragments (e.g. user.ign, base.d/) live here; ensure
+# the directory exists before other initrd code writes into it.
+mkdir -p /run/ignition
+
 echo "PLATFORM_ID=$(cmdline_arg ignition.platform.id)" > /run/ignition.env
